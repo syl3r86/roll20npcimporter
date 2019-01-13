@@ -320,6 +320,10 @@ class Roll20NpcImporter extends Application {
         actorData['data.spells.spell9.value'] = this.getAttribute(npcData.attribs, 'lvl9_slots_total');
         actorData['data.spells.spell9.max'] = actorData['data.spells.spell9.value'];
 
+        // ressources 
+        actorData['data.resources.legact.value'] = this.getAttribute(npcData.attribs, 'legendary_flag');
+        actorData['data.resources.legact.max'] = this.getAttribute(npcData.attribs, 'legendary_flag');
+
         // set items
         let actorItems = [];
         // - collect all data of type 'repeated'
@@ -356,6 +360,11 @@ class Roll20NpcImporter extends Application {
                     case 'npcaction-l':
                         this.addEntryToItemTable(legendarys, entryId, entryName, entry.current);
                         break;
+                }
+                console.log("DEBUGG " + entry.current);
+                if (typeof (entry.current) == 'string' && entry.current.indexOf('Legendary Resistance') >= 0) {
+                    actorData['data.resources.legres.value'] = entry.current.match(/\d+/);
+                    actorData['data.resources.legres.max'] = entry.current.match(/\d+/);
                 }
             }
         });
