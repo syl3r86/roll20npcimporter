@@ -1,4 +1,4 @@
-# roll20npcimporter
+# Roll20 NPC Importer
 A module for FoundryVTT, used to import DND5e NPC sheets from the popular Roll20 application
 
 Download and put the roll20npcimporter folder into FoundryVTT/public/modules
