@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.1.2
+ * @version 0.1.3
  */
 
 class Roll20NpcImporter extends Application {
@@ -16,6 +16,8 @@ class Roll20NpcImporter extends Application {
 
         this.legendaryPrefix = 'LA - '; // prefix used for legendary Actions
         this.reactionPrefix = 'RE - '; // prefix used for reactions
+
+        this.defaultHealth = 10; // default health used if all else failed
 
     }
 
@@ -139,14 +141,16 @@ class Roll20NpcImporter extends Application {
      * @param {boolean} getMaxValue - optional param, required if the max value is requested
      */
     getAttribute(data, name, getMaxValue = false) {
+        
         //return "this is a test";
         let result = null;
         data.forEach(function (item, index) {
             if (item.name == name) {
                 if (getMaxValue == true) {
                     result = item.max;
+                } else {
+                    result = item.current;
                 }
-                result = item.current;
             }
         });
         if (result == null) {
@@ -172,9 +176,18 @@ class Roll20NpcImporter extends Application {
 
         // set attributes
         actorData['data.attributes.ac.value'] = this.getAttribute(npcData.attribs, 'npc_ac');
-        actorData['data.attributes.hp.max'] = this.getAttribute(npcData.attribs, 'hp', true);
-        actorData['data.attributes.hp.value'] = this.getAttribute(npcData.attribs, 'hp');
-        actorData['data.attributes.hp.formula'] = this.getAttribute(npcData.attribs, 'npc_hpformula');
+        actorData['data.attributes.hp.formula'] = this.getAttribute(npcData.attribs, 'npc_hpformula') == false ? this.defaultHealth : this.getAttribute(npcData.attribs, 'npc_hpformula');
+        let hp = 10;
+        console.log("DEBUG: maxhp:" + this.getAttribute(npcData.attribs, 'hp', true) + ', hp:' + this.getAttribute(npcData.attribs, 'hp'));
+        if (this.getAttribute(npcData.attribs, 'hp', true) != false) {
+            hp = this.getAttribute(npcData.attribs, 'hp', true);
+        } else if (this.getAttribute(npcData.attribs, 'hp') != false) {
+            hp = this.getAttribute(npcData.attribs, 'hp');
+        } else {
+            hp = this.setDefaultHealth(actorData['data.attributes.hp.formula']);
+        }
+        actorData['data.attributes.hp.value'] = hp;
+        actorData['data.attributes.hp.max'] = hp;
         actorData['data.attributes.init.mod'] = this.getAttribute(npcData.attribs, 'initiative_bonus');
         actorData['data.attributes.prof.value'] = Math.floor((7 + actorData['data.details.cr.value']) /4);
         actorData['data.attributes.speed.value'] = this.getAttribute(npcData.attribs, 'npc_speed');
@@ -738,6 +751,17 @@ class Roll20NpcImporter extends Application {
     async createActorItems(actor, items) {
         for (let item of items) {
             await actor.createOwnedItem(item, true);
+        }
+    }
+
+    setDefaultHealth(formula) {
+        try {
+            let dice = new Roll(formula);
+            dice.roll()
+            console.log('NPCImporter: Rolling for NPC health, formula: ' + formula + ', rollresult: ' + dice.total);
+            return dice.total;
+        } catch (e) {
+            console.log('NPCImporter: Rolling for NPC health failed, formula: ' + formula + 'setting the default healt value to ' + this.defaultHealth);
         }
     }
 }
