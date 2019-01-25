@@ -19,6 +19,12 @@ class Roll20NpcImporter extends Application {
 
         this.defaultHealth = 10; // default health used if all else failed
 
+        this.showTokenName = 20; // 0=no, 1=control, 2=hover, 3=always, 20=owner hover, 40=owner
+        this.showTokenBars = 40;
+
+        this.tokenBar1Link = 'attributes.hp';
+        this.tokenBar2Link = '';
+
     }
 
     /**
@@ -567,7 +573,7 @@ class Roll20NpcImporter extends Application {
         // set token
         try {
             let npcTokenData = JSON.parse(npcData.defaulttoken.replace('\\', ''));
-            actorData['token.displayName'] = 2; // TODO: put into settings, 0=no, 1=control, 2=hover, 3=always
+            actorData['token.displayName'] = this.showTokenName; 
             actorData['token.name'] = actorData['name'];
             actorData['token.img'] = npcTokenData['imgsrc'];
             actorData['token.width'] = this.getTokenSize(actorData['data.abilities.size.value']);
@@ -581,13 +587,13 @@ class Roll20NpcImporter extends Application {
                 actorData['token.brightLight'] = npcTokenData['light_radius'];
             }
 
-            actorData['token.displayBars'] = 2; // TODO: put into settings, 0=no, 1=control, 2=hover, 3=always
-            actorData['token.bar1.attribute'] = "attributes.hp"; // TODO: put default value into options            
+            actorData['token.displayBars'] = this.showTokenBars;            
             actorData['token.bar1.value'] = npcTokenData['bar1_value'];
-            actorData['token.bar1.max'] = npcTokenData['bar1_max'];
-            //actorData['token.bar2.attribute'] = "attributes.hp"; // TODO: put default value into options            
+            actorData['token.bar1.max'] = npcTokenData['bar1_max'];         
             actorData['token.bar2.value'] = npcTokenData['bar2_value'];
             actorData['token.bar2.max'] = npcTokenData['bar2_max'];
+            actorData['token.bar1.attribute'] = this.tokenBar1Link;
+            actorData['token.bar2.attribute'] = this.tokenBar2Link;   
 
 
         } catch (e) {
