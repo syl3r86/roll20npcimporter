@@ -26,3 +26,23 @@ ul {
     line-height: 28px;
     margin-left: 10%;
 }
+
+#actors.flexcolumn.active {
+    display: flex;
+    flex-direction: column;
+}
+#actors.flexcolumn > .directory-list {
+    width: 100%;
+    height: auto;
+    flex-basis: 0;
+    flex-grow: 1;
+}
+#actors.flexcolumn > .directory-footer {
+    height: auto;
+}
+#actors.flexcolumn > .directory-footer > * {
+    margin-top: 5px;
+}
+.dnd5e.actor-sheet .biography .editor-content span {
+    display: inline;
+}
