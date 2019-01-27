@@ -1,6 +1,6 @@
 /**
- * @author Felix Müller aka syl3r86
- * @version 0.2.0
+ * @author Felix MÃ¼ller aka syl3r86
+ * @version 0.2.1
  */
 
 class Roll20NpcImporter extends Application {
@@ -630,7 +630,7 @@ class Roll20NpcImporter extends Application {
         // set token
         try {
             let npcTokenData = JSON.parse(npcData.defaulttoken.replace('\\', ''));
-            actorData['token.displayName'] = this.showTokenName; 
+            actorData['token.displayName'] = parseInt(this.showTokenName); 
             actorData['token.name'] = actorData['name'];
             actorData['token.img'] = npcTokenData['imgsrc'];
             actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
@@ -644,7 +644,7 @@ class Roll20NpcImporter extends Application {
                 actorData['token.brightLight'] = npcTokenData['light_radius'];
             }
 
-            actorData['token.displayBars'] = this.showTokenBars;            
+            actorData['token.displayBars'] = parseInt(this.showTokenBars);            
             actorData['token.bar1.value'] = npcTokenData['bar1_value'];
             actorData['token.bar1.max'] = npcTokenData['bar1_max'];         
             actorData['token.bar2.value'] = npcTokenData['bar2_value'];
