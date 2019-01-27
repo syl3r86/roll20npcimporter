@@ -1,19 +1,28 @@
-#actors.flexcolumn.active {
-    display: flex;
-    flex-direction: column;
+ul {
+    list-style: none;
+    padding:0;
 }
-#actors.flexcolumn > .directory-list {
-    width: 100%;
-    height: auto;
-    flex-basis: 0;
-    flex-grow: 1;
+.import-tab{
+    width: 45%;
+    line-height: 32px;
+    margin: 0 2.5%;
+    border: 1px solid #AAA;
+    border-radius: 3px;
 }
-#actors.flexcolumn > .directory-footer {
-    height: auto;
+.import-tab.active{
+    box-shadow: 0 0 10px #ff6400;
+    text-shadow: 0 0 10px #ff6400 !important;   
 }
-#actors.flexcolumn > .directory-footer > * {
-    margin-top: 5px;
+.import-tab.hover{
+    box-shadow: 0 0 10px #ff6400;
 }
-.dnd5e.actor-sheet .biography .editor-content span {
-    display: inline;
+
+
+.btn {
+    width: 80%;
+    background: rgba(255,255,255,0.75);
+    border: 1px solid #AAA;
+    border-radius: 3px;
+    line-height: 28px;
+    margin-left: 10%;
 }

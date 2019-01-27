@@ -1,0 +1,91 @@
+<div>
+    <ul class="tabs">
+     <li class="item import-tab" data-tab="import">Basic</li>
+     <li class="item import-tab" data-tab="advanced">Advanced</li>
+    </ul>
+
+    <div class="tab" data-tab="import">
+        <p>Instrutions to import NPCs from Roll20.</p>
+        <ol> 
+            <li>Have the browser plugin <a href="https://ssstormy.github.io/roll20-enhancement-suite/">VTT Enhancement Suit</a></li>
+            <li>Open the Roll20 game containing the NPC and open the sheet</li>
+            <li>Use the export function in the "Export and Overwrite" tab</li>
+            <li>Post the contents of the downloaded .json file</li>
+        </ol>
+        <p><textarea class="npc-data form-control" cols="30" rows="5" autofocus placeholder="Paste your NPC data here"></textarea></p>
+    </div>
+
+    <div class="tab" data-tab="advanced">
+        <h3 class="form-header">Options</h3>
+        <p class="notes">Configure Prefixes and default HP.</p>
+        <div class="form-group">
+            <label>Legendary Action Prefix</label>
+            <input type="text" name="legendaryPrefix" placeholder="LA - " value="{{legendaryPrefix}}" data-dtype="String"/>
+        </div>
+        <div class="form-group">
+            <label>Reaction Prefix</label>
+            <input type="text" name="reactionPrefix" placeholder="RE - " value="{{reactionPrefix}}" data-dtype="String"/>
+        </div>    
+        <div class="form-group">
+            <label>Default HP</label>
+            <input type="text" name="defaultHealth" placeholder="10" value="10" data-dtype="Number"/>
+        </div>    
+        <hr>
+
+        <h3 class="form-header">Default Token Config</h3>
+        <p class="notes">Configure the Token settings in case none can be found.</p>
+        <div class="form-group">
+            <label>Show Nameplate:</label>
+            <select class="bar-attribute" name="showNameMode">
+                {{#each viewModesName}}            
+                <option value="{{value}}" {{#selected}}selected="selected"{{/selected}}>{{name}}</option>
+                {{/each}}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Display Bars:</label>
+            <select class="bar-attribute" name="showBarMode">
+                {{#each viewModesBar}}            
+                <option value="{{value}}" {{#selected}}selected="selected"{{/selected}}>{{name}}</option>
+                {{/each}}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Bar 1 Attribute:</label>
+            <select class="bar-attribute" name="tokenBar1Link">
+                <option value="">None</option>
+                <option value="attributes.hp">HP</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Bar 2 Attribute:</label>
+            <select class="bar-attribute" name="tokenBar2Link">
+                <option value="">None</option>
+                <option value="attributes.hp">HP</option>
+            </select>
+        </div>
+        <hr>
+
+        <h3 class="form-header">Loading modes</h3>
+        <p class="notes">Advanced options for loading from files</p>
+        <!--
+        <div class="form-group">
+            <label>Target mode:</label>
+            <select class="bar-attribute" name="targetMode">
+                <option value="actor" selected>Actor</option>
+                <option value="compendium">Compendium</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Target compendium name</label>
+            <input type="text" name="compendiumname" placeholder="CompendiumName" value="" data-dtype="String"/>
+        </div>
+        -->
+        <div class="form-group">
+            <label>Folder or File source</label>
+            <input type="file" name="fileUploads" accept=".json" multiple/>
+        </div>
+    </div>
+
+    <input type="button" class="startImport btn" value="Import"/>
+</div>

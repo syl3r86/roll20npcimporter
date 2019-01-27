@@ -1,6 +1,6 @@
 /**
- * @author Felix MÃ¼ller aka syl3r86
- * @version 0.1.3
+ * @author Felix Müller aka syl3r86
+ * @version 0.2.0
  */
 
 class Roll20NpcImporter extends Application {
@@ -8,8 +8,9 @@ class Roll20NpcImporter extends Application {
     constructor(app) {
         super(app);
 
-        this.hookActorSheet();
         this.hookActorList();
+
+        // setting some default options here, change to your liking. Options will be available in the app too
 
         this.legendaryAsAttacks = false;  // if false, legendary actions will be added to feats, true means weapons/attacks
         this.reactionsAsAttacks = false; // if false, reactions will be added to feats, true means weapons/attacks
@@ -27,25 +28,91 @@ class Roll20NpcImporter extends Application {
 
     }
 
-    /**
-     * Hook into the render call for the Actor5eSheet to add an extra button
-     */
-    hookActorSheet() {
-        Hooks.on('renderActor5eSheet', (app, html, data) => {
-            if(!data.owner) return;
+    static get defaultOptions() {
+        const options = super.defaultOptions;
+        options.template = "public/modules/roll20npcimporter/template/roll20npcimporter.html";
+        options.width = 500;
+        options.height = "auto";
+        return options;
+    }
 
-            const windowHeader = html.parent().parent().find('.window-header');
-            const windowCloseBtn = windowHeader.find('.close');
-            const importButton = $('<a class="r20npcImportSheet"><span class="fas fa-file-import"></span> NPC Import</a>');
+    getData() {
+        let options = {
+            legendaryPrefix: 'LA - ',       // prefix used for legendary Actions
+            reactionPrefix: 'RE - ', // prefix used for reactions
 
-            windowHeader.find('.r20npcImportSheet').remove();
-            windowCloseBtn.before(importButton);
+            defaultHealth: 10, // default health used if all else failed
+            
+            tokenBar1Link: this.tokenBar1Link,
+            tokenBar2Link: this.tokenBar2Link,
 
-            // Handle button clicks
-            importButton.click(ev => {
-                ev.preventDefault();
-                this.showImportDialog({ actor: app.actor });
+            viewModesName:[
+                { name: 'no',           value: '0' },
+                { name: 'control',      value: '1' },
+                { name: 'hover',        value: '2' },
+                { name: 'always',       value: '3' },
+                { name: 'owner hover',  value: '20', selected:true },
+                { name: 'owner',        value: '40' }
+            ],
+            viewModesBar: [
+                { name: 'no',           value: '0' },
+                { name: 'control',      value: '1' },
+                { name: 'hover',        value: '2' },
+                { name: 'always',       value: '3' },
+                { name: 'owner hover',  value: '20' },
+                { name: 'owner',        value: '40', selected: true }
+            ]
+        }
+        return options;
+    }
+
+    activateListeners(html) {
+
+        let nav = html.find('.tabs');
+        // TODO: REMOVE THIS LATER
+        if (game.data.version === "0.1.3") {
+            new Tabs(nav, "import", t => tabs.activateTab(t));
+        } else {
+            new Tabs(nav, {
+                initial: "import",
+                callback: t => tabs.activateTab(t)
             });
+        }
+
+        $(".startImport").click(async (ev) => {
+            ev.preventDefault();
+            this.legendaryPrefix = html.find("input[name=legendaryPrefix]").val();
+            this.reactionPrefix = html.find("input[name=reactionPrefix]").val();
+            this.defaultHealth = html.find("input[name=defaultHealth]").val();
+
+            this.showTokenName = html.find("select[name=showNameMode]").val();
+            this.showTokenBars = html.find("select[name=showBarMode]").val();
+
+            this.tokenBar1Link = html.find("select[name=tokenBar1Link]").val();
+            this.tokenBar2Link = html.find("select[name=tokenBar2Link]").val();
+
+            let targetMode = html.find("select[name=targetMode]").val();
+            let compendiumName = html.find("input[name=compendiumname]").val();
+
+            let files = html.find("input[name=fileUploads]").prop('files');
+
+            let npcs = [];
+
+            try {
+                await this.loadFiles(files, npcs);
+            } catch (e) {
+                console.log('There was a problem loading the files');
+                console.log(e.message);
+            }
+
+            let npcString = html.find(".npc-data").val();
+            if (npcString != undefined && npcString != '')
+                npcs.push(npcString);
+
+            for (let npc of npcs) {
+                this.importNpc(npc, targetMode, compendiumName);
+            }
+            this.close();
         });
     }
 
@@ -62,45 +129,10 @@ class Roll20NpcImporter extends Application {
             // Handle button clicks
             importButton.click(ev => {
                 ev.preventDefault();
-                this.showImportDialog();
+                this.render(true);
+                //this.showImportDialog();
             });
         });
-    }
-
-    showImportDialog(actor = null) {
-        let out = '';
-
-        out += '<p>Instrutions to import NPCs from Roll20.</p>';
-        out += '<ol> ';
-        out += '<li>Have the browser plugin <a href="https://ssstormy.github.io/roll20-enhancement-suite/">VTT Enhancement Suit</a></li>';
-        out += '<li>Open the Roll20 game containing the NPC and open the sheet</li>';
-        out += '<li>Use the export function in the "Export and Overwrite" tab</li>';
-        out += '<li>Post the contents of the downloaded .json file</li>';
-        out += '</ol>';
-        out += '<p><textarea class="npc-data form-control" cols="30" rows="5" autofocus placeholder="Paste your NPC data here"></textarea></p>';
-
-        // console.log(options.actor);
-
-        const d = new Dialog({
-            title: "Roll20 NPC Importer",
-            content: out,
-            buttons: {
-                "import": {
-                    icon: '',
-                    label: "Import",
-                    callback: (e) => {
-                        const characterData = document.querySelector('.npc-data').value;
-                        this.importNpc(characterData, actor);
-                    }
-                },
-                "cancel": {
-                    icon: '',
-                    label: "Cancel",
-                    callback: () => { }
-                }
-            }
-        });
-        d.render(true);
     }
 
     /**
@@ -108,7 +140,7 @@ class Roll20NpcImporter extends Application {
      * @param {String} sheetData - a JSON string representing the character Data
      * @param {Object} actor - the actor into which to put the data
      * */
-    importNpc(sheetData, actor = null) {
+    importNpc(sheetData, targetMode, compendiumName = '') {
         // check valid JSON string
         let npcData = null;
         try {
@@ -126,17 +158,35 @@ class Roll20NpcImporter extends Application {
         }
 
         // create actor if required
-        if (actor == null) {
+        // TODO: change this part for compendium storage
+        let actor = null;
+        if (targetMode == 'compendium') {
+            if (compendiumName != '') {
+                let compendium = game.packs.find(p => p.collection === compendiumName);
+                if (compendium == null || compendium == undefined) {
+                    console.log('Could not find compendium with the name ' + compendiumName);
+                }
+                let npcName = this.getAttribute(npcData.attribs, 'npc_name');
+                console.log("NPCImporter: creating npc named " + npcName);
+                let npc = new Actor5e({ name: npcName, type: 'npc' }, true).then(actor => {
+                    actor.render(false);
+                    setTimeout(() => {
+                        this.parseNpcData(actor, npcData);
+                    }, 250);
+                });
+                compendium.importEntity(npc);
+            } else {
+                console.log('no compendium name was given');
+            }
+        } else {
             let npcName = this.getAttribute(npcData.attribs, 'npc_name');
             console.log("NPCImporter: creating npc named " + npcName);
             Actor5e.create({ name: npcName, type: 'npc' }, true).then(actor => {
-                actor.render(true);
+                actor.render(false);
                 setTimeout(() => {
                     this.parseNpcData(actor, npcData);
                 }, 250);
             });
-        } else {
-            this.parseNpcData(actor, npcData);
         }
     }
 
@@ -184,7 +234,6 @@ class Roll20NpcImporter extends Application {
         actorData['data.attributes.ac.value'] = this.getAttribute(npcData.attribs, 'npc_ac');
         actorData['data.attributes.hp.formula'] = this.getAttribute(npcData.attribs, 'npc_hpformula') == false ? this.defaultHealth : this.getAttribute(npcData.attribs, 'npc_hpformula');
         let hp = 10;
-        console.log("DEBUG: maxhp:" + this.getAttribute(npcData.attribs, 'hp', true) + ', hp:' + this.getAttribute(npcData.attribs, 'hp'));
         if (this.getAttribute(npcData.attribs, 'hp', true) != false) {
             hp = this.getAttribute(npcData.attribs, 'hp', true);
         } else if (this.getAttribute(npcData.attribs, 'hp') != false) {
@@ -373,8 +422,16 @@ class Roll20NpcImporter extends Application {
         actorData['data.spells.spell9.max'] = actorData['data.spells.spell9.value'];
 
         // ressources 
-        actorData['data.resources.legact.value'] = this.getAttribute(npcData.attribs, 'legendary_flag');
-        actorData['data.resources.legact.max'] = this.getAttribute(npcData.attribs, 'legendary_flag');
+        let legActions = this.getAttribute(npcData.attribs, 'npc_legendary_actions');
+        if (legActions == false) {
+            legActions = this.getAttribute(npcData.attribs, 'legendary_flag');
+        }
+        if (legActions == false) {
+            legActions = 0;
+        }
+            
+        actorData['data.resources.legact.value'] = legActions;
+        actorData['data.resources.legact.max'] = legActions;
 
         // set items
         let actorItems = [];
@@ -576,7 +633,7 @@ class Roll20NpcImporter extends Application {
             actorData['token.displayName'] = this.showTokenName; 
             actorData['token.name'] = actorData['name'];
             actorData['token.img'] = npcTokenData['imgsrc'];
-            actorData['token.width'] = this.getTokenSize(actorData['data.abilities.size.value']);
+            actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
             actorData['token.height'] = actorData['token.width']
             if (npcTokenData['light_hassight'] == true) {
                 actorData['token.dimSight'] = npcTokenData['light_dimradius'];
@@ -647,7 +704,7 @@ class Roll20NpcImporter extends Application {
      * @param {String} npcTypeString
      */
     getSize(npcTypeString) {
-        let defaultSize = "medium";
+        let returnSize = "medium";
         npcTypeString = npcTypeString.toLowerCase();
         let sizes = [
             'fine', 
@@ -660,12 +717,14 @@ class Roll20NpcImporter extends Application {
             'gargantuan',
             'colossal'
         ]
-        sizes.forEach(function (item) {
-            if (npcTypeString.toLowerCase().includes(item)) {
-                return item;
+
+        for(let item of sizes) {
+            if (npcTypeString.indexOf(item) != -1) {
+                returnSize = item;
+                break;
             }
-        });
-        return defaultSize;
+        }
+        return returnSize;
     }
 
     /**
@@ -760,6 +819,10 @@ class Roll20NpcImporter extends Application {
         }
     }
 
+    /**
+     * tries to roll health via the provided formula, if unsuccessfull (invalid formula for example) it'll use the defaultHealth value
+     * @param {String} formula - string containing a rollable formula like '2d10+15'
+     */
     setDefaultHealth(formula) {
         try {
             let dice = new Roll(formula);
@@ -768,10 +831,33 @@ class Roll20NpcImporter extends Application {
             return dice.total;
         } catch (e) {
             console.log('NPCImporter: Rolling for NPC health failed, formula: ' + formula + 'setting the default healt value to ' + this.defaultHealth);
+            return this.defaultHealth;
         }
+    }
+
+    async loadFiles(files, targetArray) {
+        for(let file of files) {
+            let fileContent = await this.readFileAsync(file);
+            targetArray.push(fileContent);
+        }
+        return targetArray;
+    }
+
+    readFileAsync(file) {
+        return new Promise((resolve, reject) => {
+            let reader = new FileReader();
+
+            reader.onload = (evt) => {
+                resolve(evt.target.result);
+            };
+
+            reader.onerror = reject;
+
+            reader.readAsText(file, "UTF-8");
+        });
     }
 }
 
 
 let roll20NpcImporter = new Roll20NpcImporter();
-//roll20NpcImporter.render();
+//roll20NpcImporter.render(true);
