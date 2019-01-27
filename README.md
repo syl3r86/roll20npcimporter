@@ -13,7 +13,6 @@ Instructions to import NPCs from Roll20:
 Big thanks to Atropos for troubleshooting and Sillvva for providing a good example with the DNDBeyond importer.
 
 Known shortcomings to be fixed in the future:
-- Proper options menu on how to treat legendary actions and reactions
 - improvement on the senses/passive perception display
 - proper cleaning of the Monstertype string
-- tokenbar only support hp for now
+- importing directly into a compendium
