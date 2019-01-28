@@ -48,17 +48,17 @@ class Roll20NpcImporter extends Application {
 
             viewModesName:[
                 { name: 'no',           value: '0' },
-                { name: 'control',      value: '1' },
-                { name: 'hover',        value: '2' },
-                { name: 'always',       value: '3' },
+                { name: 'control',      value: '10' },
+                { name: 'hover',        value: '30' },
+                { name: 'always',       value: '50' },
                 { name: 'owner hover',  value: '20', selected:true },
                 { name: 'owner',        value: '40' }
             ],
             viewModesBar: [
                 { name: 'no',           value: '0' },
-                { name: 'control',      value: '1' },
-                { name: 'hover',        value: '2' },
-                { name: 'always',       value: '3' },
+                { name: 'control',      value: '10' },
+                { name: 'hover',        value: '30' },
+                { name: 'always',       value: '50' },
                 { name: 'owner hover',  value: '20' },
                 { name: 'owner',        value: '40', selected: true }
             ]
@@ -69,15 +69,10 @@ class Roll20NpcImporter extends Application {
     activateListeners(html) {
 
         let nav = html.find('.tabs');
-        // TODO: REMOVE THIS LATER
-        if (game.data.version === "0.1.3") {
-            new Tabs(nav, "import", t => tabs.activateTab(t));
-        } else {
-            new Tabs(nav, {
-                initial: "import",
-                callback: t => tabs.activateTab(t)
-            });
-        }
+        new Tabs(nav, {
+            initial: "import",
+            callback: t => console.log(t)
+        });
 
         $(".startImport").click(async (ev) => {
             ev.preventDefault();
@@ -113,6 +108,7 @@ class Roll20NpcImporter extends Application {
                 this.importNpc(npc, targetMode, compendiumName);
             }
             this.close();
+            Promise.resolve();
         });
     }
 
@@ -181,7 +177,7 @@ class Roll20NpcImporter extends Application {
         } else {
             let npcName = this.getAttribute(npcData.attribs, 'npc_name');
             console.log("NPCImporter: creating npc named " + npcName);
-            Actor5e.create({ name: npcName, type: 'npc' }, true).then(actor => {
+            Actor5e.create({ name: npcName, type: 'npc' }, { temporary: false, displaySheet:false }).then(actor => {
                 actor.render(false);
                 setTimeout(() => {
                     this.parseNpcData(actor, npcData);
@@ -236,8 +232,8 @@ class Roll20NpcImporter extends Application {
         let hp = 10;
         if (this.getAttribute(npcData.attribs, 'hp', true) != false) {
             hp = this.getAttribute(npcData.attribs, 'hp', true);
-        } else if (this.getAttribute(npcData.attribs, 'hp') != false) {
-            hp = this.getAttribute(npcData.attribs, 'hp');
+        } else if (this.getAttribute(npcData.attribs, 'npc_hpbase') != false) {
+            hp = this.getAttribute(npcData.attribs, 'npc_hpbase');
         } else {
             hp = this.setDefaultHealth(actorData['data.attributes.hp.formula']);
         }
@@ -636,17 +632,22 @@ class Roll20NpcImporter extends Application {
             actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
             actorData['token.height'] = actorData['token.width']
             if (npcTokenData['light_hassight'] == true) {
-                actorData['token.dimSight'] = npcTokenData['light_dimradius'];
-                actorData['token.brightSight'] = npcTokenData['light_radius'];
+                actorData['token.dimSight'] = parseInt(npcTokenData['light_dimradius']);
+                actorData['token.brightSight'] = parseInt(npcTokenData['light_radius']);
             }
             if (npcTokenData['light_otherplayers'] == true) {
-                actorData['token.dimLight'] = npcTokenData['light_dimradius'];
-                actorData['token.brightLight'] = npcTokenData['light_radius'];
+                actorData['token.dimLight'] = parseInt(npcTokenData['light_dimradius']);
+                actorData['token.brightLight'] = parseInt(npcTokenData['light_radius']);
             }
 
-            actorData['token.displayBars'] = parseInt(this.showTokenBars);            
-            actorData['token.bar1.value'] = npcTokenData['bar1_value'];
-            actorData['token.bar1.max'] = npcTokenData['bar1_max'];         
+            actorData['token.displayBars'] = parseInt(this.showTokenBars);
+            if (this.tokenBar1Link == 'attributes.hp') {
+                actorData['token.bar1.value'] = actorData['data.attributes.hp.value'];
+                actorData['token.bar1.max'] = actorData['data.attributes.hp.max'];
+            } else {
+                actorData['token.bar1.value'] = npcTokenData['bar1_value'];
+                actorData['token.bar1.max'] = npcTokenData['bar1_max'];     
+            }    
             actorData['token.bar2.value'] = npcTokenData['bar2_value'];
             actorData['token.bar2.max'] = npcTokenData['bar2_max'];
             actorData['token.bar1.attribute'] = this.tokenBar1Link;
