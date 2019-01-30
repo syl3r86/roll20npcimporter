@@ -1,7 +1,12 @@
 /**
- * @author Felix MÃ¼ller aka syl3r86
- * @version 0.2.1
+ * @author Felix Müller aka syl3r86
+ * @version 0.3
  */
+
+/*
+ * comp = game.packs.find(p => p.collection === "dnd5e.spells");
+ * pack.importEntity(item);
+ * */
 
 class Roll20NpcImporter extends Application {
 
@@ -26,6 +31,11 @@ class Roll20NpcImporter extends Application {
         this.tokenBar1Link = 'attributes.hp';
         this.tokenBar2Link = '';
 
+        this.defaultSource = 'Roll20 Importer';
+
+        this.showMissingAttribError = false;
+
+        this.useTokenAsAvatar = false;
     }
 
     static get defaultOptions() {
@@ -37,48 +47,60 @@ class Roll20NpcImporter extends Application {
     }
 
     getData() {
-        let options = {
-            legendaryPrefix: 'LA - ',       // prefix used for legendary Actions
-            reactionPrefix: 'RE - ', // prefix used for reactions
+        let tokenDisplayMode = [];
+        for (let key in TOKEN_DISPLAY_MODES) {
+            let modeString = key.toLowerCase();
+            modeString = modeString.replace('_', ' ');
+            modeString = this.fixUpperCase(modeString);//.replace(/(^|\s)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
+            tokenDisplayMode.push({ name: modeString, value: TOKEN_DISPLAY_MODES[key] });
+        };
 
-            defaultHealth: 10, // default health used if all else failed
-            
+        let actorCompendie = [];
+        let spellCompendie = [];
+        spellCompendie.push({ name: 'None', value: 'noComp' });
+        for (let compendium of game.packs) {
+            if (compendium['metadata']['entity'] == "Actor" && compendium['metadata']['module'] == 'world') {
+                actorCompendie.push({ name: compendium['metadata']['label'], value: compendium.collection})
+            }
+            if (compendium['metadata']['entity'] == "Item") {
+                spellCompendie.push({ name: compendium['metadata']['label'], value: compendium.collection })
+            }
+        }
+
+        let options = {
+            legendaryPrefix: this.legendaryPrefix,
+            reactionPrefix: this.reactionPrefix,        
+            defaultHealth: this.defaultHealth, 
+            defaultSource: this.defaultSource,
+            useTokenAsAvatar: this.useTokenAsAvatar,
+
             tokenBar1Link: this.tokenBar1Link,
             tokenBar2Link: this.tokenBar2Link,
-
-            viewModesName:[
-                { name: 'no',           value: '0' },
-                { name: 'control',      value: '10' },
-                { name: 'hover',        value: '30' },
-                { name: 'always',       value: '50' },
-                { name: 'owner hover',  value: '20', selected:true },
-                { name: 'owner',        value: '40' }
-            ],
-            viewModesBar: [
-                { name: 'no',           value: '0' },
-                { name: 'control',      value: '10' },
-                { name: 'hover',        value: '30' },
-                { name: 'always',       value: '50' },
-                { name: 'owner hover',  value: '20' },
-                { name: 'owner',        value: '40', selected: true }
-            ]
+            displayModes: tokenDisplayMode,
+            defaultNameDisplay: tokenDisplayMode[2]['value'],
+            defaultBarDisplay: tokenDisplayMode[4]['value'],
+            actorCompendie: actorCompendie,
+            spellCompendie: spellCompendie
         }
         return options;
     }
 
     activateListeners(html) {
+        html.find("select[name=compendiumName]").parent().hide();
 
         let nav = html.find('.tabs');
         new Tabs(nav, {
-            initial: "import",
-            callback: t => console.log(t)
-        });
+            initial: "import"
+        }); //,        callback: t => console.log(t)
 
         $(".startImport").click(async (ev) => {
             ev.preventDefault();
             this.legendaryPrefix = html.find("input[name=legendaryPrefix]").val();
             this.reactionPrefix = html.find("input[name=reactionPrefix]").val();
             this.defaultHealth = html.find("input[name=defaultHealth]").val();
+            this.defaultSource = html.find("input[name=defaultSource]").val();
+            this.useTokenAsAvatar = html.find("input[name=useTokenAsAvatar]").prop("checked");
+            console.log('DEBUG useTokenAsAvatar= ' + this.useTokenAsAvatar);
 
             this.showTokenName = html.find("select[name=showNameMode]").val();
             this.showTokenBars = html.find("select[name=showBarMode]").val();
@@ -87,7 +109,14 @@ class Roll20NpcImporter extends Application {
             this.tokenBar2Link = html.find("select[name=tokenBar2Link]").val();
 
             let targetMode = html.find("select[name=targetMode]").val();
-            let compendiumName = html.find("input[name=compendiumname]").val();
+            let targetCompendium = html.find("select[name=compendiumName]").val();
+            let spellCompendium = html.find("select[name=spellCompendiumName]").val();
+            if (spellCompendium == 'noComp') {
+                this.spellCompendium = null;
+            } else {
+                this.spellCompendium = game.packs.find(p => p.collection === spellCompendium);
+                this.spellCompendium.getIndex();
+            }
 
             let files = html.find("input[name=fileUploads]").prop('files');
 
@@ -96,7 +125,7 @@ class Roll20NpcImporter extends Application {
             try {
                 await this.loadFiles(files, npcs);
             } catch (e) {
-                console.log('There was a problem loading the files');
+                console.log('NPCImporter: There was a problem loading the files');
                 console.log(e.message);
             }
 
@@ -105,10 +134,18 @@ class Roll20NpcImporter extends Application {
                 npcs.push(npcString);
 
             for (let npc of npcs) {
-                this.importNpc(npc, targetMode, compendiumName);
+                this.importNpc(npc, targetMode, targetCompendium);
             }
             this.close();
             Promise.resolve();
+        });
+
+        html.find('select[name=targetMode]').change(val => {
+            if (html.find('select[name=targetMode]').val() == 'actor') {
+                html.find("select[name=compendiumName]").parent().hide(250);
+            } else {
+                html.find("select[name=compendiumName]").parent().show(250);
+            }
         });
     }
 
@@ -136,7 +173,7 @@ class Roll20NpcImporter extends Application {
      * @param {String} sheetData - a JSON string representing the character Data
      * @param {Object} actor - the actor into which to put the data
      * */
-    importNpc(sheetData, targetMode, compendiumName = '') {
+    async importNpc(sheetData, targetMode, compendiumName = '') {
         // check valid JSON string
         let npcData = null;
         try {
@@ -160,28 +197,26 @@ class Roll20NpcImporter extends Application {
             if (compendiumName != '') {
                 let compendium = game.packs.find(p => p.collection === compendiumName);
                 if (compendium == null || compendium == undefined) {
-                    console.log('Could not find compendium with the name ' + compendiumName);
+                    console.log('NPCImporter: Could not find compendium with the name ' + compendiumName);
+                } else {
+                    let npcName = this.getAttribute(npcData.attribs, 'npc_name');
+                    console.log("NPCImporter: Creating npc named " + npcName);
+                    let npc = Actor5e.create({ name: npcName, type: 'npc' }, { temporary: true, displaySheet: false }).then(async actor => {
+                        await this.parseNpcData(actor, npcData, true);
+                        console.log("NPCImporter: Importing into the compendium");
+                        compendium.importEntity(actor);
+                        //actor.delete();
+                    });
                 }
-                let npcName = this.getAttribute(npcData.attribs, 'npc_name');
-                console.log("NPCImporter: creating npc named " + npcName);
-                let npc = new Actor5e({ name: npcName, type: 'npc' }, true).then(actor => {
-                    actor.render(false);
-                    setTimeout(() => {
-                        this.parseNpcData(actor, npcData);
-                    }, 250);
-                });
-                compendium.importEntity(npc);
             } else {
-                console.log('no compendium name was given');
+                console.log('NPCImporter: No compendium name was given');
             }
         } else {
             let npcName = this.getAttribute(npcData.attribs, 'npc_name');
             console.log("NPCImporter: creating npc named " + npcName);
-            Actor5e.create({ name: npcName, type: 'npc' }, { temporary: false, displaySheet:false }).then(actor => {
+            Actor5e.create({ name: npcName, type: 'npc' }, { temporary: false, displaySheet:false }).then(async actor => {
                 actor.render(false);
-                setTimeout(() => {
-                    this.parseNpcData(actor, npcData);
-                }, 250);
+                await this.parseNpcData(actor, npcData, false);
             });
         }
     }
@@ -206,25 +241,36 @@ class Roll20NpcImporter extends Application {
             }
         });
         if (result == null) {
-            console.error("Could not find Value for " + name);
+            if (this.showMissingAttribError) {
+                console.error("Could not find Value for " + name);
+            }
             return false;
         }
         return result;
     }
 
-    parseNpcData(actor, npcData) {
-        console.log("NPCImporter: parsing data");
+    async parseNpcData(actor, npcData, tempActor) {
+        console.log("NPCImporter: Parsing data");
+        //let tmpActorItems = 
         let actorData = {};
 
         // set details
         actorData['name'] = this.getAttribute(npcData.attribs, 'npc_name');
         actorData['img'] = npcData.avatar;
         actorData['data.details.cr.value'] = parseInt(this.getAttribute(npcData.attribs, 'npc_challenge')); // parsing has to be done here since the value is needed for calculations
-        let npcType = this.getType(this.getAttribute(npcData.attribs, 'npc_type'));
-        actorData['data.details.type.value'] = npcType;
-        let alignment = this.getAlignment(this.getAttribute(npcData.attribs, 'npc_type'));
-        actorData['data.details.alignment.value'] = alignment;
-        actorData['data.details.source.value'] = "Roll20 import";
+        
+        let npcType = this.cleanTypeString(this.getAttribute(npcData.attribs, 'npc_type'))
+        actorData['data.details.type.value'] = this.fixUpperCase(npcType.type);
+        actorData['data.details.alignment.value'] = this.fixUpperCase(npcType.alignment);
+        actorData['data.details.source.value'] = this.defaultSource;
+
+        let bio = npcData.bio;
+        if (npcData.gmnotes != '') {
+            bio = bio + '\n<p><strong>GM Notes:</strong></p>\n<p>' + npcData.gmnotes + '</p>';
+        }
+        actorData['data.details.biography.value'] = bio;
+
+
 
         // set attributes
         actorData['data.attributes.ac.value'] = this.getAttribute(npcData.attribs, 'npc_ac');
@@ -387,10 +433,16 @@ class Roll20NpcImporter extends Application {
                 actorData['data.attributes.prof.value'],
                 actorData['data.abilities.wis.value']);
 
+
         // set traits
-        actorData['data.traits.size.value'] = this.getSize(this.getAttribute(npcData.attribs, 'npc_type'));
+        actorData['data.traits.size.value'] = this.fixUpperCase(npcType.size);//this.getSize(this.getAttribute(npcData.attribs, 'npc_type'));
         actorData['data.traits.senses.value'] = this.getAttribute(npcData.attribs, 'npc_senses');
-        actorData['data.traits.perception.value'] = 10 + actorData['data.skills.per.mod'];
+
+        let passivePerception = 10 + Math.floor((actorData['data.abilities.wis.value'] - 10) / 2);
+        if (actorData['data.skills.prc.value'] != undefined) {
+            passivePerception = passivePerception + (actorData['data.attributes.prof.value'] * actorData['data.skills.prc.value']);
+        }
+        actorData['data.traits.perception.value'] = passivePerception;
         actorData['data.traits.languages.value'] = this.getAttribute(npcData.attribs, 'npc_languages');
         actorData['data.traits.di.value'] = this.getAttribute(npcData.attribs, 'npc_immunities');
         actorData['data.traits.dr.value'] = this.getAttribute(npcData.attribs, 'npc_resistances');
@@ -476,7 +528,7 @@ class Roll20NpcImporter extends Application {
                         this.addEntryToItemTable(legendarys, entryId, entryName, entry.current);
                         break;
                 }
-                if (typeof (entry.current) == 'string' && entry.current.indexOf('Legendary Resistance') >= 0) {
+                if (typeof (entry.current) == 'string' && entry.current.indexOf('Legendary Resistance (') >= 0) {
                     actorData['data.resources.legres.value'] = entry.current.match(/\d+/);
                     actorData['data.resources.legres.max'] = entry.current.match(/\d+/);
                 }
@@ -506,7 +558,20 @@ class Roll20NpcImporter extends Application {
             for (let spellId in spells) {
                 if (spells[spellId].spellname == 'CANTRIPS' || spells[spellId].spellname.indexOf('LEVEL') != -1)
                     continue;
-                
+                if (this.spellCompendium !== null) {
+                    let spell = this.spellCompendium.index.find(e => e.name === spells[spellId].spellname);
+                    if (spell != null && spell != undefined) {
+                        console.log('NPCImporter: Found Spell ' + spells[spellId].spellname + ' in compendium, using that');
+                        if (tempActor) {
+                            spell = await this.spellCompendium.getEntry(spell['id']);
+                            actorItems.push(spell);
+                        } else {
+                            actor.importItemFromCollection(this.spellCompendium.collection, spell['id']);
+                        }
+                        continue;
+                    }
+                } 
+
                 let components = spells[spellId].spellcomp == undefined ? '' : spells[spellId].spellcomp;
                 let concentration = spells[spellId].spellconcentration != null ? true : false;
                 let damage = spells[spellId].spelldamage == undefined ? '' : spells[spellId].spelldamage;
@@ -629,6 +694,9 @@ class Roll20NpcImporter extends Application {
             actorData['token.displayName'] = parseInt(this.showTokenName); 
             actorData['token.name'] = actorData['name'];
             actorData['token.img'] = npcTokenData['imgsrc'];
+            if (this.useTokenAsAvatar) {
+                actorData['img'] = actorData['token.img'];
+            }
             actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
             actorData['token.height'] = actorData['token.width']
             if (npcTokenData['light_hassight'] == true) {
@@ -660,11 +728,29 @@ class Roll20NpcImporter extends Application {
         }
         
         
-        
+
         // save data to actor
-        this.createActorItems(actor, actorItems);
+        await this.createActorItems(actor, actorItems, tempActor);
         actor.update(actorData);
+
     }
+
+    /**
+     * splits a npctype string like "meadium Beast, unaligned" into 3 substrings containing type, size and alignement in seperate Strings
+     * @param {String} npcString
+     */
+    cleanTypeString(npcString) {
+        npcString = npcString.toLowerCase();
+        let cleanString = {
+            type: '',
+            size: this.getSize(npcString),
+            alignment: this.getAlignment(npcString)
+        }
+
+        cleanString.type = this.fixUpperCase(npcString.replace(cleanString.size, '').replace(cleanString.alignment, '')).trim().replace(',','');
+        return cleanString;
+    }
+
 
     /**
      * Cleans the type string of npcs, removing alignment and size, not yet fully implemented
@@ -690,7 +776,9 @@ class Roll20NpcImporter extends Application {
             'chaotic',
             'good',
             'evil',
-            'neutral'
+            'neutral',
+            'unaligned',
+            'any alignment'
         ]
         alignments.forEach(function (item) {
             if (npcTypeString.includes(item)) {
@@ -706,7 +794,7 @@ class Roll20NpcImporter extends Application {
      */
     getSize(npcTypeString) {
         let returnSize = "medium";
-        npcTypeString = npcTypeString.toLowerCase();
+        //npcTypeString = npcTypeString.toLowerCase();
         let sizes = [
             'fine', 
             'diminutive',
@@ -719,9 +807,9 @@ class Roll20NpcImporter extends Application {
             'colossal'
         ]
 
-        for(let item of sizes) {
-            if (npcTypeString.indexOf(item) != -1) {
-                returnSize = item;
+        for(let size of sizes) {
+            if (npcTypeString.indexOf(size) != -1) {
+                returnSize = size;
                 break;
             }
         }
@@ -774,7 +862,7 @@ class Roll20NpcImporter extends Application {
      * @param {String} creatureSize
      */
     getTokenSize(creatureSize) {
-        switch (creatureSize) {
+        switch (creatureSize.toLowerCase()) {
             case 'large': return 2; break;
             case 'huge': return 3; break;
             case 'gargantuan': return 4; break;
@@ -814,9 +902,18 @@ class Roll20NpcImporter extends Application {
      * @param {Object} actor - the actor object that gets the items
      * @param {Object} items - an object representing the item
      */
-    async createActorItems(actor, items) {
+    async createActorItems(actor, items, tempActor) {
+        let itemCount = 0;
         for (let item of items) {
-            await actor.createOwnedItem(item, true);
+            itemCount++;
+            if (tempActor) {
+                let tempItem = await Item.create(item, { temporary: true, displaySheet: false });
+                tempItem = tempItem.data;
+                tempItem["id"] = itemCount;
+                actor.data.items.push(tempItem);
+            } else {
+                await actor.createOwnedItem(item, true);
+            }
         }
     }
 
@@ -836,6 +933,11 @@ class Roll20NpcImporter extends Application {
         }
     }
 
+    /**
+     * Loads all files from a File Picker element and puts the ontent into the targetArray
+     * @param {any} files
+     * @param {Array} targetArray
+     */
     async loadFiles(files, targetArray) {
         for(let file of files) {
             let fileContent = await this.readFileAsync(file);
@@ -844,6 +946,10 @@ class Roll20NpcImporter extends Application {
         return targetArray;
     }
 
+    /**
+     * Async loading of a file, returns text content
+     * @param {any} file
+     */
     readFileAsync(file) {
         return new Promise((resolve, reject) => {
             let reader = new FileReader();
@@ -856,6 +962,14 @@ class Roll20NpcImporter extends Application {
 
             reader.readAsText(file, "UTF-8");
         });
+    }
+
+    /**
+     * turns the first letter of every word into upperCase
+     * @param {String} string
+     */
+    fixUpperCase(string) {
+        return string.replace(/(^|\s)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); })
     }
 }
 
