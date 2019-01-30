@@ -10,10 +10,11 @@ Instructions to import NPCs from Roll20:
 4. Select the .json file(s) you wish to import
 5. press import
 
-Big thanks to Atropos for troubleshooting and Sillvva for providing a good example with the DNDBeyond importer.
-
 Known shortcomings to be fixed in the future:
 - Fallback in case spellslots coming through as 0
 - shaped sheet support
+
+
+Big thanks to Atropos for troubleshooting and Sillvva for providing a good example with the DNDBeyond importer.
 
 If you feel like supporting my work, feel free to leave a tip at my paypal felix.mueller.86@web.de
