@@ -11,6 +11,7 @@ Instructions to import NPCs from Roll20:
 4. Select the .json file(s) you wish to import
 5. press import
 
+
 Advanced Options:
 - Legendary Action and Reaction Prefix
    - Sets a Prefix for those 2 types of Features to distinguish them from regular Features since Foundry doesnt have seperate Items for them yet
