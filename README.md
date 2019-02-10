@@ -26,9 +26,10 @@ Advanced Options:
    - You can choose to import an Actor either as a regular Actor into the Actor List or into a Compendium. If you want to Import into a compendium you have to choose a Compendium from the list. It only lists Actor compendiums that are local to the World and ignores Compendie outside of the World folder.
    - You can choose a Spell Compendium if you want. This will allow the Importer to pull a spell from the chosen compendium (if found) instead of creating a new Spell. This way you can use the preformated and icon'd Spells instead of Spells containing unformated, raw text. If a spell can't be found it will still create the spell, so you do not lose any spells. 
 
+Shaped Charactersheet Support is currently in beta, for anything missed or not correctly imported, contact me in discord (Felix#6196) or per email (syl3r31@gmail.com). Make sure to include the .json file of the character that has the issue.
+
 Planed features for the future:
 - Fallback in case a spellcasting npc has no spellslot information saved
-- shaped sheet support
 
 
 Big thanks to Atropos for troubleshooting and Sillvva for providing a good example with the DNDBeyond importer.
