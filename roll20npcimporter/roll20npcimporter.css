@@ -11,20 +11,21 @@ ul {
 }
 .import-tab.active{
     box-shadow: 0 0 10px #ff6400;
-    text-shadow: 0 0 10px #ff6400 !important;   
+    text-shadow: none !important; 
+	transition: 0.2s ease-in-out;  
 }
-.import-tab.hover{
-    box-shadow: 0 0 10px #ff6400;
+.import-tab:hover{
+    text-shadow: 0 0 10px #ff6400;
+	transition: 0.2s ease-in-out;
 }
 
 
 .btn {
-    width: 80%;
+    width: 100%;
     background: rgba(255,255,255,0.75);
     border: 1px solid #AAA;
     border-radius: 3px;
     line-height: 28px;
-    margin-left: 10%;
 }
 
 #actors.flexcolumn.active {
