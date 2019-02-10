@@ -1,6 +1,6 @@
 /**
- * @author Felix Müller aka syl3r86
- * @version 0.3
+ * @author Felix MÃ¼ller aka syl3r86
+ * @version 0.3.1
  */
 
 /*
@@ -17,11 +17,17 @@ class Roll20NpcImporter extends Application {
 
         // setting some default options here, change to your liking. Options will be available in the app too
 
-        this.legendaryAsAttacks = false;  // if false, legendary actions will be added to feats, true means weapons/attacks
         this.reactionsAsAttacks = false; // if false, reactions will be added to feats, true means weapons/attacks
-
-        this.legendaryPrefix = 'LA - '; // prefix used for legendary Actions
         this.reactionPrefix = 'RE - '; // prefix used for reactions
+
+        this.legendaryAsAttacks = false;  // if false, legendary actions will be added to feats, true means weapons/attacks
+        this.legendaryPrefix = 'LA - '; // prefix used for legendary Actions
+
+        this.lairAsAttacks = false;
+        this.lairPrefix = 'Lair Action';
+
+        this.regionalAsAttacks = false;
+        this.regionalPrefix = 'Regional Effect';
 
         this.defaultHealth = 10; // default health used if all else failed
 
@@ -36,6 +42,8 @@ class Roll20NpcImporter extends Application {
         this.showMissingAttribError = false;
 
         this.useTokenAsAvatar = false;
+
+        this.isOgl = true;
     }
 
     static get defaultOptions() {
@@ -100,7 +108,6 @@ class Roll20NpcImporter extends Application {
             this.defaultHealth = html.find("input[name=defaultHealth]").val();
             this.defaultSource = html.find("input[name=defaultSource]").val();
             this.useTokenAsAvatar = html.find("input[name=useTokenAsAvatar]").prop("checked");
-            console.log('DEBUG useTokenAsAvatar= ' + this.useTokenAsAvatar);
 
             this.showTokenName = html.find("select[name=showNameMode]").val();
             this.showTokenBars = html.find("select[name=showBarMode]").val();
@@ -184,6 +191,12 @@ class Roll20NpcImporter extends Application {
             return;
         }
 
+        // check if its an ogl or shaped sheet
+        let sheet = this.getAttribute(npcData.attribs, 'character_sheet');
+        if (sheet != false && sheet.indexOf('Shaped') != -1) {
+            this.isOgl = false;
+        }
+
         // check if its an NPC thats being imported
         if (this.getAttribute(npcData.attribs, 'npc') != '1') {
             console.error("Invalid JSON, the character is not an NPC");
@@ -221,48 +234,150 @@ class Roll20NpcImporter extends Application {
         }
     }
 
-    /**
-     * returns either the current or max value of the first attribute with the name specified
-     * @param {Array} data - the array containing the attributes
-     * @param {String} name - the name of the searched attribute
-     * @param {boolean} getMaxValue - optional param, required if the max value is requested
-     */
-    getAttribute(data, name, getMaxValue = false) {
-        
-        //return "this is a test";
-        let result = null;
-        data.forEach(function (item, index) {
-            if (item.name == name) {
-                if (getMaxValue == true) {
-                    result = item.max;
-                } else {
-                    result = item.current;
+    async parseNpcData(actor, npcData, tempActor) {
+        console.log("NPCImporter: Parsing data");
+        let actorData = {};
+
+        // prepare repeating items
+        let actorItems = [];
+        // - collect all data of type 'repeated'
+        let spells = {};
+        let attacks = {};
+        let feats = {};
+        let legendarys = {};
+        let reactions = {};
+        let lair = {};
+        let regional = {};
+
+
+        npcData.attribs.forEach(entry => {
+            if (entry.name.indexOf('repeating') != -1) {
+                let splitEntry = entry.name.split('_')
+                let entryType = splitEntry[1]
+                let entryId = splitEntry[2];
+                let entryName = '';
+                for (let i = 3; i < splitEntry.length; i++) {
+                    entryName += splitEntry[i];
+                }
+                let entryNameMax = entryName + 'Max';
+                switch (entryType) {
+                    case 'npctrait':
+                    case 'trait':
+                        this.addEntryToItemTable(feats, entryId, entryName, entry.current);
+                        break;
+                    case 'npcaction':
+                    case 'action':
+                        this.addEntryToItemTable(attacks, entryId, entryName, entry.current);
+                        break;
+                    case 'spell-npc':
+                    case 'spell-cantrip':
+                    case 'spell-1':
+                    case 'spell-2':
+                    case 'spell-3':
+                    case 'spell-4':
+                    case 'spell-5':
+                    case 'spell-6':
+                    case 'spell-7':
+                    case 'spell-8':
+                    case 'spell-9':
+                    case 'spell0':
+                    case 'spell1':
+                    case 'spell2':
+                    case 'spell3':
+                    case 'spell4':
+                    case 'spell5':
+                    case 'spell6':
+                    case 'spell7':
+                    case 'spell8':
+                    case 'spell9':
+                        spells = this.addEntryToItemTable(spells, entryId, entryName, entry.current);
+                        break;
+                    case 'npcreaction':
+                    case 'reaction':
+                        this.addEntryToItemTable(reactions, entryId, entryName, entry.current);
+                        break;
+                    case 'npcaction-l':
+                    case 'legendaryaction':
+                        this.addEntryToItemTable(legendarys, entryId, entryName, entry.current);
+                        break;
+                    case 'lairaction':
+                        this.addEntryToItemTable(lair, entryId, entryName, entry.current);
+                        break;
+                    case 'regionaleffect':
+                        this.addEntryToItemTable(regional, entryId, entryName, entry.current);
+                        break;
+                }
+                if (typeof (entry.current) == 'string' && entry.current.indexOf('Legendary Resistance (') >= 0) {
+                    actorData['data.resources.legres.value'] = entry.current.match(/\d+/);
+                    actorData['data.resources.legres.max'] = entry.current.match(/\d+/);
                 }
             }
         });
-        if (result == null) {
-            if (this.showMissingAttribError) {
-                console.error("Could not find Value for " + name);
-            }
-            return false;
-        }
-        return result;
-    }
 
-    async parseNpcData(actor, npcData, tempActor) {
-        console.log("NPCImporter: Parsing data");
-        //let tmpActorItems = 
-        let actorData = {};
+        for (let legendaryId in legendarys) {
+            legendarys[legendaryId].name = this.legendaryPrefix + legendarys[legendaryId].name;
+            if (this.legendaryAsAttacks) {
+                attacks[legendaryId] = legendarys[legendaryId];
+            } else {
+                feats[legendaryId] = legendarys[legendaryId];
+            }
+        }
+
+        for (let reactionId in reactions) {
+            reactions[reactionId].name = this.reactionPrefix + reactions[reactionId].name;
+            if (this.reactionsAsAttacks) {
+                attacks[reactionId] = reactions[reactionId];
+            } else {
+                feats[reactionId] = reactions[reactionId];
+            }
+        }
+        let lairNum = 0;
+        for (let lairId in lair) {
+            if (lair[lairId][this.translateAttribName('name')] == undefined) {
+                lair[lairId][this.translateAttribName('name')] = this.lairPrefix + ' '+ ++lairNum;
+            } else {
+                lair[lairId][this.translateAttribName('name')] = this.lairPrefix + ' - ' + lair[lairId][this.translateAttribName('name')];
+            }
+            if (this.lairAsAttacks) {
+                attacks[lairId] = lair[lairId];
+            } else {
+                feats[lairId] = lair[lairId];
+            }
+        }
+        let regNum = 0;
+        for (let regionalId in regional) {
+            if (regional[regionalId][this.translateAttribName('name')] == undefined) {
+                regional[regionalId][this.translateAttribName('name')] = this.regionalPrefix + ' ' + ++regNum;
+            } else {
+                regional[regionalId][this.translateAttribName('name')] = this.regionalPrefix + ' - ' + regional[regionalId][this.translateAttribName('name')];
+            }
+            if (this.regionalAsAttacks) {
+                attacks[regionalId] = regional[regionalId];
+            } else {
+                feats[regionalId] = regional[regionalId];
+            }
+        }
 
         // set details
         actorData['name'] = this.getAttribute(npcData.attribs, 'npc_name');
+        if (actorData['name'] == false) {
+            actorData['name'] = npcData.name;
+        }
         actorData['img'] = npcData.avatar;
         actorData['data.details.cr.value'] = parseInt(this.getAttribute(npcData.attribs, 'npc_challenge')); // parsing has to be done here since the value is needed for calculations
         
-        let npcType = this.cleanTypeString(this.getAttribute(npcData.attribs, 'npc_type'))
-        actorData['data.details.type.value'] = this.fixUpperCase(npcType.type);
-        actorData['data.details.alignment.value'] = this.fixUpperCase(npcType.alignment);
-        actorData['data.details.source.value'] = this.defaultSource;
+        if (this.isOgl) {
+            let npcType = this.cleanTypeString(this.getAttribute(npcData.attribs, 'npc_type'));
+            actorData['data.details.type.value'] = this.fixUpperCase(npcType.type);
+            actorData['data.details.alignment.value'] = this.fixUpperCase(npcType.alignment);
+            actorData['data.details.source.value'] = this.defaultSource;
+            actorData['data.traits.size.value'] = this.fixUpperCase(npcType.size)
+        } else {
+            actorData['data.details.type.value'] = this.fixUpperCase(this.getAttribute(npcData.attribs, 'type'));
+            actorData['data.details.alignment.value'] = this.fixUpperCase(this.getAttribute(npcData.attribs, 'alignment'));
+            actorData['data.details.source.value'] = this.defaultSource;
+            actorData['data.traits.size.value'] = this.fixUpperCase(this.getAttribute(npcData.attribs, 'size'));
+        }
 
         let bio = npcData.bio;
         if (npcData.gmnotes != '') {
@@ -435,7 +550,6 @@ class Roll20NpcImporter extends Application {
 
 
         // set traits
-        actorData['data.traits.size.value'] = this.fixUpperCase(npcType.size);//this.getSize(this.getAttribute(npcData.attribs, 'npc_type'));
         actorData['data.traits.senses.value'] = this.getAttribute(npcData.attribs, 'npc_senses');
 
         let passivePerception = 10 + Math.floor((actorData['data.abilities.wis.value'] - 10) / 2);
@@ -481,85 +595,14 @@ class Roll20NpcImporter extends Application {
         actorData['data.resources.legact.value'] = legActions;
         actorData['data.resources.legact.max'] = legActions;
 
-        // set items
-        let actorItems = [];
-        // - collect all data of type 'repeated'
-        let spells = {};
-        let attacks = {};
-        let feats = {};
-        let legendarys = {};
-        let reactions = {};
-
-
-        npcData.attribs.forEach(entry => {
-            if (entry.name.indexOf('repeating') != -1) {
-                let splitEntry = entry.name.split('_')
-                let entryType = splitEntry[1]
-                let entryId = splitEntry[2];
-                let entryName = '';
-                for (let i = 3; i < splitEntry.length; i++) {
-                    entryName += splitEntry[i];
-                }
-                let entryNameMax = entryName + 'Max';
-                switch (entryType) {
-                    case 'npctrait':
-                        this.addEntryToItemTable(feats, entryId, entryName, entry.current);
-                        break;
-                    case 'npcaction':
-                        this.addEntryToItemTable(attacks, entryId, entryName, entry.current);
-                        break;
-                    case 'spell-npc':
-                    case 'spell-cantrip':
-                    case 'spell-1':
-                    case 'spell-2':
-                    case 'spell-3':
-                    case 'spell-4':
-                    case 'spell-5':
-                    case 'spell-6':
-                    case 'spell-7':
-                    case 'spell-8':
-                    case 'spell-9':
-                        spells = this.addEntryToItemTable(spells, entryId, entryName, entry.current);
-                        break;
-                    case 'npcreaction': 
-                        this.addEntryToItemTable(reactions, entryId, entryName, entry.current);
-                        break;
-                    case 'npcaction-l':
-                        this.addEntryToItemTable(legendarys, entryId, entryName, entry.current);
-                        break;
-                }
-                if (typeof (entry.current) == 'string' && entry.current.indexOf('Legendary Resistance (') >= 0) {
-                    actorData['data.resources.legres.value'] = entry.current.match(/\d+/);
-                    actorData['data.resources.legres.max'] = entry.current.match(/\d+/);
-                }
-            }
-        });
-
-        for (let legendaryId in legendarys) {
-            legendarys[legendaryId].name = this.legendaryPrefix + legendarys[legendaryId].name;
-            if (this.legendaryAsAttacks) {
-                attacks[legendaryId] = legendarys[legendaryId];
-            } else {
-                feats[legendaryId] = legendarys[legendaryId];
-            }
-        }
-
-        for (let reactionId in reactions) {
-            reactions[reactionId].name = this.reactionPrefix + reactions[reactionId].name;
-            if (this.reactionsAsAttacks) {
-                attacks[reactionId] = reactions[reactionId];
-            } else {
-                feats[reactionId] = reactions[reactionId];
-            }
-        }
-
         // create and save items
         if (Object.keys(spells).length > 0) {
             for (let spellId in spells) {
-                if (spells[spellId].spellname == 'CANTRIPS' || spells[spellId].spellname.indexOf('LEVEL') != -1)
+                if (spells[spellId][this.translateAttribName('spellName')] == 'CANTRIPS' || spells[spellId][this.translateAttribName('spellName')].indexOf('LEVEL') != -1)
                     continue;
+                let spellName = spells[spellId][this.translateAttribName('spellName')];
                 if (this.spellCompendium !== null) {
-                    let spell = this.spellCompendium.index.find(e => e.name === spells[spellId].spellname);
+                    let spell = this.spellCompendium.index.find(e => e.name === spellName);
                     if (spell != null && spell != undefined) {
                         console.log('NPCImporter: Found Spell ' + spells[spellId].spellname + ' in compendium, using that');
                         if (tempActor) {
@@ -570,35 +613,78 @@ class Roll20NpcImporter extends Application {
                         }
                         continue;
                     }
-                } 
-
-                let components = spells[spellId].spellcomp == undefined ? '' : spells[spellId].spellcomp;
-                let concentration = spells[spellId].spellconcentration != null ? true : false;
-                let damage = spells[spellId].spelldamage == undefined ? '' : spells[spellId].spelldamage;
-                let damageType = spells[spellId].spelldamagetype == undefined ? '' : spells[spellId].spelldamagetype.toLowerCase();
-                let description = spells[spellId].spelldescription == undefined ? spells[spellId].spellcontent : spells[spellId].spelldescription;
-                let duration = spells[spellId].spellduration == undefined ? '' : spells[spellId].spellduration;
-                let level = spells[spellId].spelllevel == 'cantrip' ? 0 : spells[spellId].spelllevel;
-                let materials = spells[spellId].spellcompmaterials == undefined ? '' : spells[spellId].spellcompmaterials;
-                let range = spells[spellId].spellrange == undefined ? '' : spells[spellId].spellrange;
-                let ritual = spells[spellId].spellritual != null ? true : false;
-                let save = spells[spellId].spellsave != null ? this.getShortformAbility(spells[spellId].spellsave) : '';
+                }
+                //console.log(spells[spellId][this.translateAttribName('spelldescription')]);
+                let components = spells[spellId][this.translateAttribName('spellcomp')] == undefined ? '' : spells[spellId][this.translateAttribName('spellcomp')];
+                let concentration = spells[spellId][this.translateAttribName('spellconcentration')] != null ? true : false;
+                let description = spells[spellId][this.translateAttribName('spelldescription')] != undefined ? spells[spellId][this.translateAttribName('spelldescription')] : spells[spellId][this.translateAttribName('spellcontent')];
+                if (spells[spellId][this.translateAttribName('spellathigherlevels')] != undefined) description = description + '\n Cast at higher level:' + spells[spellId][this.translateAttribName('spellathigherlevels')];
+                let duration = spells[spellId][this.translateAttribName('spellduration')] == undefined ? '' : spells[spellId][this.translateAttribName('spellduration')];
+                let level = spells[spellId][this.translateAttribName('spelllevel')] == 'cantrip' ? 0 : spells[spellId][this.translateAttribName('spelllevel')];
+                if (this.isOgl == false) level = level[0];
+                if (level == 'C') level = 0;
+                let materials = spells[spellId][this.translateAttribName('spellcompmaterials')] == undefined ? '' : spells[spellId][this.translateAttribName('spellcompmaterials')];
+                let range = spells[spellId][this.translateAttribName('spellrange')] == undefined ? '' : spells[spellId][this.translateAttribName('spellrange')];
                 let school = 'abj';
-                if (spells[spellId].spellschool != undefined && spells[spellId].spellschool.length > 0)
-                    school = this.getShortformSchool(spells[spellId].spellschool);
-                let source = '';
+                if (spells[spellId][this.translateAttribName('spellschool')] != undefined && spells[spellId][this.translateAttribName('spellschool')].length > 0)
+                    school = this.getShortformSchool(spells[spellId][this.translateAttribName('spellschool')]);
                 let spelltype = 'utility';
-                if (spells[spellId].spellsave != null) {
+                
+                let target = spells[spellId][this.translateAttribName('spelltarget')] == undefined ? '' : spells[spellId][this.translateAttribName('spelltarget')] + '';
+                let time = spells[spellId][this.translateAttribName('spellcastingtime')] == undefined ? '' : spells[spellId][this.translateAttribName('spellcastingtime')] + '';
+
+
+                let save = spells[spellId][this.translateAttribName('spellsave')] != null ? this.getShortformAbility(spells[spellId][this.translateAttribName('spellsave')]) : '';
+                let ritual = spells[spellId][this.translateAttribName('spellritual')] != null ? true : false;
+                let damage = spells[spellId][this.translateAttribName('spelldamage')] == undefined ? '' : spells[spellId][this.translateAttribName('spelldamage')];
+                let damageType = spells[spellId][this.translateAttribName('spelldamagetype')] == undefined ? '' : spells[spellId][this.translateAttribName('spelldamagetype')].toLowerCase();
+                if (save == true) {
                     spelltype = 'save';
                 } else if (spells[spellId].spelloutput = 'ATTACK') {
                     spelltype = 'attack';
                 }
-                let target = spells[spellId].spelltarget == undefined ? '' : spells[spellId].spelltarget + '';
-                let time = spells[spellId].spellcastingtime == undefined ? '' : spells[spellId].spellcastingtime + '';
 
+                if (this.isOgl == false) {
+                    if (spells[spellId][this.translateAttribName('spelloutput')] == 'ATTACK') {
+                        // saving throw dmg
+                        let dmg;
+                        let type;
+                        if (spells[spellId][this.translateAttribName('attackability')] != undefined) {
+                            spelltype = 'attack';
+                            dmg = spells[spellId][this.translateAttribName('attackdamagedice')];
+                            if (Number.isInteger(dmg) == false) {
+                                dmg = 1;
+                            }
+                            dmg = dmg + spells[spellId][this.translateAttribName('attackdamagedie')];
+                            type = spells[spellId][this.translateAttribName('attackdamagetype')];
+                        } else {
+                            spelltype = 'save';
+                            dmg = spells[spellId][this.translateAttribName('savingthrowdamagedice')];
+                            if (Number.isInteger(dmg) == false) {
+                                dmg = 1;
+                            }
+                            dmg = dmg + spells[spellId][this.translateAttribName('savingthrowdamagedie')];
+                            type = spells[spellId][this.translateAttribName('savingthrowdamagetype')];
+                        }
+                        damage = dmg;
+                        damageType = type;
+                    }
+
+                    spellName = this.fixUpperCase(spellName);
+                    time = this.fixUpperCase(time.replace('_', ' ').toLowerCase());
+                    duration = this.fixUpperCase(duration.replace(/_/g, ' ').toLowerCase());
+                    let newComponents = '';
+                    for (let i = 1; i < components.split('_').length; i++) {
+                        newComponents += components.split('_')[i];
+                        if (i < (components.split('_').length - 1)) {
+                            newComponents += ' ';
+                        }
+                    }
+                    components = newComponents;
+                }
 
                 let spellObject = {
-                    name: spells[spellId].spellname,
+                    name: spellName,
                     type: "spell",
                     img: 'icons/mystery-man.png',
                     data: {
@@ -606,7 +692,7 @@ class Roll20NpcImporter extends Application {
                         concentration: { type: "Boolean", label: "Requires Concentration", value: concentration },
                         damage: { type: "String", label: "Spell Damage", value: damage },
                         damageType: { type: "String", label: "Damage Type", value: damageType },
-                        description: { type: "String", label: "Description", value: description + '\n Cast at higher level:' + spells[spellId].spellathigherlevels },
+                        description: { type: "String", label: "Description", value: description },
                         duration: { type: "String", label: "Duration", value: duration },
                         level: { type: "Number", label: "Spell Level", value: level },
                         materials: { type: "String", label: "Materials", value: materials },
@@ -628,14 +714,31 @@ class Roll20NpcImporter extends Application {
             for (let attackId in attacks) {
                 let strMod = Math.floor(actorData['data.abilities.str.value'] / 2 - 5);
 
-                let name = attacks[attackId].name != undefined ? attacks[attackId].name : attacks[attackId].namedisplay;
-                let description = attacks[attackId].desc == undefined ? attacks[attackId].description : attacks[attackId].desc;
-                let bonus = attacks[attackId].attacktohit == undefined ? '' : (attacks[attackId].attacktohit - actorData['data.attributes.prof.value'] - strMod);
+                let name = attacks[attackId][this.translateAttribName('attName')] != undefined ? attacks[attackId][this.translateAttribName('attName')] : attacks[attackId][this.translateAttribName('attNameAlt')];
+                let description = attacks[attackId][this.translateAttribName('attDesc')] == undefined ? attacks[attackId][this.translateAttribName('attDecAlt')] : attacks[attackId][this.translateAttribName('attDesc')];
+                let bonus = attacks[attackId][this.translateAttribName('attacktohit')] == undefined ? '' : (attacks[attackId][this.translateAttribName('attacktohit')] - actorData['data.attributes.prof.value'] - strMod);
                 let damage = attacks[attackId].attackdamage == undefined ? '' : attacks[attackId].attackdamage + '-' + strMod;
                 let damageType = attacks[attackId].attackdamagetype == undefined ? '' : attacks[attackId].attackdamagetype.toLowerCase();
                 let damage2 = attacks[attackId].attackdamage2 == undefined ? '' : attacks[attackId].attackdamage2 + '-' + strMod;
-                let damage2Type = attacks[attackId].attackdamagetype2 == undefined ? '' : attacks[attackId].attackdamagetype2.toLowerCase();
-                let range = attacks[attackId].attackrange == undefined ? '' : attacks[attackId].attackrange;
+                let damage2Type = attacks[attackId][this.translateAttribName('attackdamagetype2')] == undefined ? '' : attacks[attackId].attackdamagetype2.toLowerCase();
+                let range = attacks[attackId][this.translateAttribName('attackrange')] == undefined ? '' : attacks[attackId][this.translateAttribName('attackrange')];
+                let ability = '';
+                if (this.isOgl == false) {
+                    bonus = attacks[attackId][this.translateAttribName('attacktohit')]; // TODO: discern how hitbonus is stored
+                    ability = attacks[attackId][this.translateAttribName('attackability')];
+
+                    let dmg = attacks[attackId][this.translateAttribName('attackdamagedice')];
+                    if (Number.isInteger(dmg) == false) {
+                        dmg = 1;
+                    }
+                    damage = dmg + attacks[attackId][this.translateAttribName('attackdamagedie')];
+
+                    dmg = attacks[attackId][this.translateAttribName('attack2damagedice')];
+                    if (Number.isInteger(dmg) == false) {
+                        dmg = 1;
+                    }
+                    damage2 = dmg + attacks[attackId][this.translateAttribName('attack2damagedie')];
+                }
 
                 let attackObject = {
                     img: "icons/mystery-man.png",
@@ -657,7 +760,8 @@ class Roll20NpcImporter extends Application {
                         range: { type: "String", label: "Weapon Range", value: range },
                         source: { type: "String", label: "Source", value: 'Roll20 NPC Importer' },
                         weaponType: { type: "String", label: "Weapon Type", value: '' },
-                        weight: { type: "Number", label: "Weight", value: 0 }
+                        weight: { type: "Number", label: "Weight", value: 0 },
+                        ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
                 };
                 actorItems.push(attackObject);
@@ -665,23 +769,70 @@ class Roll20NpcImporter extends Application {
         }
         if (Object.keys(feats).length > 0) {
             for (let featId in feats) {
-                let description = feats[featId].desc == undefined ? feats[featId].description : feats[featId].desc;
+                let name = feats[featId][this.translateAttribName('attName')] != undefined ? feats[featId][this.translateAttribName('attName')] : feats[featId][this.translateAttribName('attNameAlt')];
+                let description = feats[featId][this.translateAttribName('attDesc')] == undefined ? feats[featId][this.translateAttribName('attDecAlt')] : feats[featId][this.translateAttribName('attDesc')];
+                let damage = feats[featId][this.translateAttribName('attackdamage')] == undefined ? '' : feats[featId][this.translateAttribName('attackdamage')] + '-' + strMod;
+                let damageType = feats[featId][this.translateAttribName('featdmgtype')] == undefined ? '' : feats[featId][this.translateAttribName('featdmgtype')].toLowerCase();
+                let range = feats[featId][this.translateAttribName('attackrange')] == undefined ? '' : feats[featId][this.translateAttribName('attackrange')];
+                let save = '';
+                let ability = '';
+                let featType = 'passive';
+                if (this.isOgl == false) {
+                    //bonus = feats[featId][this.translateAttribName('attacktohit')]; // TODO: discern how hitbonus is stored
+                    let abilityName;
+                    let diceName;
+                    let dieName;
+                    if (feats[featId][this.translateAttribName('healtoggle')] == 1) {
+                        diceName = 'healdice';
+                        dieName = 'healdie';
+                        abilityName = 'healability';
+                        damageType = 'healing';
+                        featType = 'ability';
+                    } else if (feats[featId][this.translateAttribName('savingthrowtoggle')] == 1) {
+                        diceName = 'savingthrowdamagedice';
+                        dieName = 'savingthrowdamagedie';
+                        abilityName = 'savingthrowability';
+                        damageType = 'savingthrowdamagetype';
+                        featType = 'ability';
+                        save = this.getShortformAbility(feats[featId][this.translateAttribName('savingthrowvsability')]);
+                    } else if (feats[featId][this.translateAttribName('otherdamagetoggle')] == 1) {
+                        diceName = 'featdamagedice';
+                        dieName = 'featdamagedie';
+                        abilityName = 'featAbility';
+                        damageType = 'otherdamagetype';
+                        featType = 'attack';
+                    }
+                    if (feats[featId][this.translateAttribName(diceName)] != undefined) {
+                        let dmg = feats[featId][this.translateAttribName(diceName)];
+                        if (Number.isInteger(dmg) == false) {
+                            dmg = 1;
+                        }
+                        damage = dmg + feats[featId][this.translateAttribName(dieName)];
+                    }
+                    if (feats[featId][this.translateAttribName(abilityName)] != undefined) {
+                        ability = feats[featId][this.translateAttribName(abilityName)];
+                    }
+                    damageType = feats[featId][this.translateAttribName(damageType)] == undefined ? '' : feats[featId][this.translateAttribName(damageType)].toLowerCase();
+
+                }
+
 
                 let featObject = {
-                    name: feats[featId].name,
+                    name: name,
                     type: 'feat',
                     data: {
-                        damage: { type: "String", label: "Ability Damage", value: '' },
-                        damageType: { type: "String", label: "Damage Type", value: '' },
+                        damage: { type: "String", label: "Ability Damage", value: damage },
+                        damageType: { type: "String", label: "Damage Type", value: damageType },
                         description: { type: "String", label: "Description", value: description},
                         duration: { type: "String", label: "Duration", value: '' },
-                        featType: { type: "String", label: "Feat Type", value: '' },
-                        range: { type: "String", label: "Range", value: '' },
+                        featType: { type: "String", label: "Feat Type", value: featType },
+                        range: { type: "String", label: "Range", value: range },
                         requirements: { type: "String", label: "Requirements", value: '' },
-                        save: { type: "String", label: "Saving Throw", value: '' },
+                        save: { type: "String", label: "Saving Throw", value: save },
                         source: { type: "String", label: "Source", value: 'Roll20 NPC Importer'  },
                         target: { type: "String", label: "Target", value: '' },
-                        time: { type: "String", label: "Casting Time", value: '' }
+                        time: { type: "String", label: "Casting Time", value: '' },
+                        ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
                 };
                 actorItems.push(featObject);
@@ -736,19 +887,50 @@ class Roll20NpcImporter extends Application {
     }
 
     /**
+     * returns either the current or max value of the first attribute with the name specified
+     * @param {Array} data - the array containing the attributes
+     * @param {String} name - the name of the searched attribute
+     * @param {boolean} getMaxValue - optional param, required if the max value is requested
+     */
+    getAttribute(data, name, getMaxValue = false) {
+        let result = null;
+        name = this.translateAttribName(name);
+        data.forEach(function (item, index) {
+            if (item.name == name) {
+                if (getMaxValue == true) {
+                    result = item.max;
+                } else {
+                    result = item.current;
+                }
+            }
+        });
+        if (result == null) {
+            if (this.showMissingAttribError) {
+                console.error("Could not find Value for " + name);
+            }
+            return false;
+        }
+        return result;
+    }
+
+    /**
      * splits a npctype string like "meadium Beast, unaligned" into 3 substrings containing type, size and alignement in seperate Strings
      * @param {String} npcString
      */
     cleanTypeString(npcString) {
-        npcString = npcString.toLowerCase();
-        let cleanString = {
-            type: '',
-            size: this.getSize(npcString),
-            alignment: this.getAlignment(npcString)
-        }
+        if (npcString != false) {
+            npcString = npcString.toLowerCase();
+            let cleanString = {
+                type: '',
+                size: this.getSize(npcString),
+                alignment: this.getAlignment(npcString)
+            }
 
-        cleanString.type = this.fixUpperCase(npcString.replace(cleanString.size, '').replace(cleanString.alignment, '')).trim().replace(',','');
-        return cleanString;
+            cleanString.type = this.fixUpperCase(npcString.replace(cleanString.size, '').replace(cleanString.alignment, '')).trim().replace(',', '');
+            return cleanString;
+        } else {
+            return { type: '', size: '', alignment: '' };
+        }
     }
 
 
@@ -969,10 +1151,169 @@ class Roll20NpcImporter extends Application {
      * @param {String} string
      */
     fixUpperCase(string) {
-        return string.replace(/(^|\s)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); })
+        return string.toLowerCase().replace(/(^|\s)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); })
+    }
+
+    /**
+     * returns the name of the attribute from the dictionary depending on this.isOgl
+     * @param {any} name
+     * @param {boolean} getShapedOverride - forces the function to return the shaped variant from the dictionary
+     */
+    translateAttribName(name) {
+        //console.log('DEBUG name:' + name);
+        //console.log('array: ' + STAT_DICTIONARY[name]);
+        //console.log('isOgl: ' + this.isOgl);
+        if (this.isOgl) {
+            if (STAT_DICTIONARY[name] != undefined && STAT_DICTIONARY[name].length == 2) {
+                //console.log('translated: ' + STAT_DICTIONARY[name][0]);
+                return STAT_DICTIONARY[name][0];
+            }
+        } else {
+            if (STAT_DICTIONARY[name] != undefined && STAT_DICTIONARY[name].length == 2) {
+                //console.log('translated: ' + STAT_DICTIONARY[name][1]);
+                return STAT_DICTIONARY[name][1];
+            }
+        }
+        return name;
     }
 }
 
+let STAT_DICTIONARY = {    
+    npc: ['npc', 'is_npc'],
+    npc_name: ['npc_name', 'shaped'],
+    npc_challenge: ['npc_challenge', 'challenge'],
+    npc_type: ['npc_type', 'shaped'],
+    npc_ac: ['npc_ac', 'AC'],
+    npc_hpformula: ['npc_hpformula', 'hp_formula'],
+    hp: ['hp', 'HP'],
+    npc_hpbase: ['npc_hpbase', 'shaped'],
+    initiative_bonus: ['initiative_bonus', 'shaped'],
+    npc_speed: ['npc_speed', 'speed'],
+    spellcasting_ability: ['spellcasting_ability', 'shaped'],
+    npc_spelldc: ['npc_spelldc', 'shaped'],
+    strength: ['strength', 'strength'],
+    npcd_str: ['npcd_str', 'shaped'],
+    dexterity: ['dexterity', 'dexterity'],
+    npcd_dex: ['npcd_dex', 'shaped'],
+    constitution: ['constitution', 'constitution'],
+    npcd_con: ['npcd_con', 'shaped'],
+    intelligence: ['intelligence', 'intelligence'],
+    npcd_int: ['npcd_int', 'shaped'],
+    wisdom: ['wisdom', 'wisdom'],
+    npcd_wis: ['npcd_wis', 'shaped'],
+    charisma: ['charisma', 'charisma'],
+    npcd_cha: ['npcd_cha', 'shaped'],
+    npc_str_save_flag: ['npc_str_save_flag', 'shaped'],
+    npc_dex_save_flag: ['npc_dex_save_flag', 'shaped'],
+    npc_con_save_flag: ['npc_con_save_flag', 'shaped'],
+    npc_int_save_flag: ['npc_int_save_flag', 'shaped'],
+    npc_wis_save_flag: ['npc_wis_save_flag', 'shaped'],
+    npc_cha_save_flag: ['npc_cha_save_flag', 'shaped'],
+    // skills
+    npc_acrobatics_flag: ['npc_acrobatics_flag', 'acrobatics'],
+    npc_acrobatics: ['npc_acrobatics', 'acrobatics'],
+    npc_animal_handling_flag: ['npc_animal_handling_flag', 'animalhandling'],
+    npc_animal_handling: ['npc_animal_handling', 'animalhandling'],
+    npc_arcana_flag: ['npc_arcana_flag', 'arcana'],
+    npc_arcana: ['npc_arcana', 'arcana'],
+    npc_athletics_flag: ['npc_athletics_flag', 'athletics'],
+    npc_athletics: ['npc_athletics', 'athletics'],
+    npc_deception_flag: ['npc_deception_flag', 'deception'],
+    npc_deception: ['npc_deception', 'deception'],
+    npc_history_flag: ['npc_history_flag', 'history'],
+    npc_history: ['npc_history', 'history'],
+    npc_insight_flag: ['npc_insight_flag', 'insight'],
+    npc_insight: ['npc_insight', 'insight'],
+    npc_intimidation_flag: ['npc_intimidation_flag', 'intimidation'],
+    npc_intimidation: ['npc_intimidation', 'intimidation'],
+    npc_investigation_flag: ['npc_investigation_flag', 'investigation'],
+    npc_investigation: ['npc_investigation', 'investigation'],
+    npc_medicine_flag: ['npc_medicine_flag', 'medicine'],
+    npc_medicine: ['npc_medicine', 'medicine'],
+    npc_nature_flag: ['npc_nature_flag', 'nature'],
+    npc_nature: ['npc_nature', 'nature'],
+    npc_perception_flag: ['npc_perception_flag', 'perception'],
+    npc_perception: ['npc_perception', 'perception'],
+    npc_performance_flag: ['npc_performance_flag', 'performance'],
+    npc_performance: ['npc_performance', 'performance'],
+    npc_persuasion_flag: ['npc_persuasion_flag', 'persuasion'],
+    npc_persuasion: ['npc_persuasion', 'persuasion'],
+    npc_religion_flag: ['npc_religion_flag', 'religion'],
+    npc_religion: ['npc_religion', 'religion'],
+    npc_sleight_of_hand_flag: ['npc_sleight_of_hand_flag', 'sleightofhand'],
+    npc_sleight_of_hand: ['npc_sleight_of_hand', 'sleightofhand'],
+    npc_stealth_flag: ['npc_stealth_flag', 'stealth'],
+    npc_stealth: ['npc_stealth', 'stealth'],
+    npc_survival_flag: ['npc_survival_flag', 'survival'],
+    npc_survival: ['npc_survival', 'survival'],
+
+
+    npc_senses: ['npc_senses', 'shaped'],
+    npc_languages: ['npc_languages', 'shaped'],
+    npc_immunities: ['npc_immunities', 'shaped'],
+    npc_resistances: ['npc_resistances', 'shaped'],
+    npc_vulnerabilities: ['npc_vulnerabilities', 'shaped'],
+    npc_condition_immunities: ['npc_condition_immunities', 'shaped'],
+    lvl1_slots_total: ['lvl1_slots_total', 'shaped'],
+    lvl2_slots_total: ['lvl2_slots_total', 'shaped'],
+    lvl3_slots_total: ['lvl3_slots_total', 'shaped'],
+    lvl4_slots_total: ['lvl4_slots_total', 'shaped'],
+    lvl5_slots_total: ['lvl5_slots_total', 'shaped'],
+    lvl6_slots_total: ['lvl6_slots_total', 'shaped'],
+    lvl7_slots_total: ['lvl7_slots_total', 'shaped'],
+    lvl8_slots_total: ['lvl8_slots_total', 'shaped'],
+    lvl9_slots_total: ['lvl9_slots_total', 'shaped'],
+    npc_legendary_actions: ['npc_legendary_actions', 'shaped'],
+    legendary_flag: ['legendary_flag', 'shaped'],
+    // spell info spellathigherlevels
+    spellName: ['spellname', 'name'],
+    spellcomp: ['spellcomp', 'components'],
+    spellconcentration: ['spellconcentration', 'concentration'],
+    spelldamage: ['spelldamage', ''],
+    spelldamagetype: ['spelldamagetype', ''],
+    spelldescription: ['spelldescription', 'content'],
+    spellathigherlevels: ['spellathigherlevels', 'higherlevel'],
+    spellduration: ['spellduration', 'duration'],
+    spelllevel: ['spelllevel', 'spelllevel'],
+    spellcompmaterials: ['spellcompmaterials', 'materials'],
+    spellrange: ['spellrange', 'range'],
+    spellritual: ['spellritual', ''],
+    spellsave: ['spellsave', 'savingthrowability'],
+    spellschool: ['spellschool', 'school'],
+    spelltarget: ['spelltarget', ''],
+    spellcastingtime: ['spellcastingtime', 'castingtime'],
+    spelloutput: ['', 'spelloutput'],
+    savingthrowability: ['', 'savingthrowability'],
+    savingthrowdamagedice: ['', 'savingthrowdamagedice'],
+    savingthrowdamagedie: ['', 'savingthrowdamagedie'],
+    savingthrowdamagetype: ['', 'savingthrowdamagetype'],
+    
+    // attack info
+    attName: ['name', 'name'],
+    attNameAlt: ['namedisplay', 'name'],
+    attDesc: ['description', 'content'],
+    attDecAlt: ['desc', 'content'],
+    attacktohit: ['attacktohit', 'shaped'],
+    attackdamage: ['attackdamage', ''],
+    attackdamagetype: ['attackdamagetype', 'attackdamagetype'],
+    attackdamage2: ['attackdamage2', ''],
+    attackdamagetype2: ['attackdamagetype2', 'seconddamageability'],
+    attackrange: ['attackrange', 'reach'],
+    attackability: ['', 'attackability'],
+    attackdamagedice: ['', 'attackdamagedice'],
+    attackdamagedie: ['', 'attackdamagedie'],
+    attack2damagedice: ['', 'secondattackdamagedice'],
+    attack2damagedie: ['', 'secondattackdamagedie'],
+
+    // feats info
+    featName: ['name', 'name'],
+    featNameAlt: ['namedisplay', 'name'],
+    featDesc: ['description', 'content'],
+    featDecAlt: ['desc', 'content'],
+    featdamagedice: ['', 'otherdamagedice'],
+    featdamagedie: ['', 'otherdamagedie'],
+    featdmgtype: ['', 'otherdamagetype'],
+}
 
 let roll20NpcImporter = new Roll20NpcImporter();
 //roll20NpcImporter.render(true);
