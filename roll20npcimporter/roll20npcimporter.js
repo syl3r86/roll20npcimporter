@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.3.1
+ * @version 0.3.2
  */
 
 /*
@@ -1316,4 +1316,3 @@ let STAT_DICTIONARY = {
 }
 
 let roll20NpcImporter = new Roll20NpcImporter();
-//roll20NpcImporter.render(true);
