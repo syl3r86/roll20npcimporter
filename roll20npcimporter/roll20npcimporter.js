@@ -851,12 +851,12 @@ class Roll20NpcImporter extends Application {
             actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
             actorData['token.height'] = actorData['token.width']
             if (npcTokenData['light_hassight'] == true) {
-                actorData['token.dimSight'] = parseInt(npcTokenData['light_dimradius']);
-                actorData['token.brightSight'] = parseInt(npcTokenData['light_radius']);
+                actorData['token.dimSight'] = parseInt(npcTokenData['light_radius']);
+                actorData['token.brightSight'] = parseInt(npcTokenData['light_dimradius']);
             }
             if (npcTokenData['light_otherplayers'] == true) {
-                actorData['token.dimLight'] = parseInt(npcTokenData['light_dimradius']);
-                actorData['token.brightLight'] = parseInt(npcTokenData['light_radius']);
+                actorData['token.dimLight'] = parseInt(npcTokenData['light_radius']);
+                actorData['token.brightLight'] = parseInt(npcTokenData['light_dimradius']);
             }
 
             actorData['token.displayBars'] = parseInt(this.showTokenBars);
