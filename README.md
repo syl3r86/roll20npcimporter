@@ -20,16 +20,15 @@ Advanced Options:
 - Default Source
   - Sets a Value forthe Source of the Actor
 - Display Options for Token Nameplate and Bars
-- Bar 1 and Bar 2 Attribute
-   - By default the Importer will put the token values into value and max value for bar 1 and 2. If either one is set to HP this will be ignored and the HP will be used for the corresponding bar.
+   - Ignore Token Lighting
+      - lets you ignore light data from the roll20 token if you prefere your tokens to be blind
+   - Bar 1 and Bar 2 Attribute
+      - By default the Importer will put the token values into value and max value for bar 1 and 2. If either one is set to HP this will be ignored and the HP will be used for the corresponding bar.
 - Compendium Integration
    - You can choose to import an Actor either as a regular Actor into the Actor List or into a Compendium. If you want to Import into a compendium you have to choose a Compendium from the list. It only lists Actor compendiums that are local to the World and ignores Compendie outside of the World folder.
    - You can choose a Spell Compendium if you want. This will allow the Importer to pull a spell from the chosen compendium (if found) instead of creating a new Spell. This way you can use the preformated and icon'd Spells instead of Spells containing unformated, raw text. If a spell can't be found it will still create the spell, so you do not lose any spells. 
 
 Shaped Charactersheet Support is currently in beta, for anything missed or not correctly imported, contact me in discord (Felix#6196) or per email (syl3r31@gmail.com). Make sure to include the .json file of the character that has the issue.
-
-Planed features for the future:
-- Fallback in case a spellcasting npc has no spellslot information saved
 
 
 Big thanks to Atropos for troubleshooting and Sillvva for providing a good example with the DNDBeyond importer.
