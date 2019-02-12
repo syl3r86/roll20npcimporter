@@ -10,7 +10,7 @@ ul {
     border-radius: 3px;
 }
 .import-tab.active{
-    box-shadow: 0 0 10px #ff6400;
+    box-shadow: inset 0 0 10px #ff6400;
     text-shadow: none !important; 
 	transition: 0.2s ease-in-out;  
 }

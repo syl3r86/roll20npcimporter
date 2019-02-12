@@ -1,6 +1,6 @@
 /**
- * @author Felix MÃ¼ller aka syl3r86
- * @version 0.3.2
+ * @author Felix Müller aka syl3r86
+ * @version 0.3.3
  */
 
 /*
@@ -42,6 +42,7 @@ class Roll20NpcImporter extends Application {
         this.showMissingAttribError = false;
 
         this.useTokenAsAvatar = false;
+        this.ignoreTokenLight = false;
 
         this.isOgl = true;
     }
@@ -81,7 +82,7 @@ class Roll20NpcImporter extends Application {
             defaultHealth: this.defaultHealth, 
             defaultSource: this.defaultSource,
             useTokenAsAvatar: this.useTokenAsAvatar,
-
+            ignoreTokenLight: this.ignoreTokenLight,
             tokenBar1Link: this.tokenBar1Link,
             tokenBar2Link: this.tokenBar2Link,
             displayModes: tokenDisplayMode,
@@ -111,6 +112,7 @@ class Roll20NpcImporter extends Application {
 
             this.showTokenName = html.find("select[name=showNameMode]").val();
             this.showTokenBars = html.find("select[name=showBarMode]").val();
+            this.ignoreTokenLight = html.find("input[name=ignoreTokenLight]").prop("checked");
 
             this.tokenBar1Link = html.find("select[name=tokenBar1Link]").val();
             this.tokenBar2Link = html.find("select[name=tokenBar2Link]").val();
@@ -122,7 +124,7 @@ class Roll20NpcImporter extends Application {
                 this.spellCompendium = null;
             } else {
                 this.spellCompendium = game.packs.find(p => p.collection === spellCompendium);
-                this.spellCompendium.getIndex();
+                await this.spellCompendium.getIndex();
             }
 
             let files = html.find("input[name=fileUploads]").prop('files');
@@ -132,7 +134,7 @@ class Roll20NpcImporter extends Application {
             try {
                 await this.loadFiles(files, npcs);
             } catch (e) {
-                console.log('NPCImporter: There was a problem loading the files');
+                console.log('NPCImporter | There was a problem loading the files');
                 console.log(e.message);
             }
 
@@ -195,6 +197,8 @@ class Roll20NpcImporter extends Application {
         let sheet = this.getAttribute(npcData.attribs, 'character_sheet');
         if (sheet != false && sheet.indexOf('Shaped') != -1) {
             this.isOgl = false;
+        } else {
+            this.isOgl = true;
         }
 
         // check if its an NPC thats being imported
@@ -210,23 +214,23 @@ class Roll20NpcImporter extends Application {
             if (compendiumName != '') {
                 let compendium = game.packs.find(p => p.collection === compendiumName);
                 if (compendium == null || compendium == undefined) {
-                    console.log('NPCImporter: Could not find compendium with the name ' + compendiumName);
+                    console.log('NPCImporter | Could not find compendium with the name ' + compendiumName);
                 } else {
                     let npcName = this.getAttribute(npcData.attribs, 'npc_name');
-                    console.log("NPCImporter: Creating npc named " + npcName);
+                    console.log("NPCImporter | Creating npc named " + npcName);
                     let npc = Actor5e.create({ name: npcName, type: 'npc' }, { temporary: true, displaySheet: false }).then(async actor => {
                         await this.parseNpcData(actor, npcData, true);
-                        console.log("NPCImporter: Importing into the compendium");
+                        console.log("NPCImporter | Importing into the compendium");
                         compendium.importEntity(actor);
                         //actor.delete();
                     });
                 }
             } else {
-                console.log('NPCImporter: No compendium name was given');
+                console.log('NPCImporter | No compendium name was given');
             }
         } else {
             let npcName = this.getAttribute(npcData.attribs, 'npc_name');
-            console.log("NPCImporter: creating npc named " + npcName);
+            console.log("NPCImporter | creating npc named " + npcName);
             Actor5e.create({ name: npcName, type: 'npc' }, { temporary: false, displaySheet:false }).then(async actor => {
                 actor.render(false);
                 await this.parseNpcData(actor, npcData, false);
@@ -235,7 +239,7 @@ class Roll20NpcImporter extends Application {
     }
 
     async parseNpcData(actor, npcData, tempActor) {
-        console.log("NPCImporter: Parsing data");
+        console.log("NPCImporter | Parsing data");
         let actorData = {};
 
         // prepare repeating items
@@ -364,6 +368,9 @@ class Roll20NpcImporter extends Application {
             actorData['name'] = npcData.name;
         }
         actorData['img'] = npcData.avatar;
+        if (actorData['img'].indexOf('?') != -1) {
+            actorData['img'] = actorData['img'].split('?')[0];
+        }
         actorData['data.details.cr.value'] = parseInt(this.getAttribute(npcData.attribs, 'npc_challenge')); // parsing has to be done here since the value is needed for calculations
         
         if (this.isOgl) {
@@ -403,7 +410,7 @@ class Roll20NpcImporter extends Application {
         actorData['data.attributes.init.mod'] = this.getAttribute(npcData.attribs, 'initiative_bonus');
         actorData['data.attributes.prof.value'] = Math.floor((7 + actorData['data.details.cr.value']) /4);
         actorData['data.attributes.speed.value'] = this.getAttribute(npcData.attribs, 'npc_speed');
-        let spellcastingVal = this.getAttribute(npcData.attribs, 'spellcasting_ability'); 
+        let spellcastingVal = this.getAttribute(npcData.attribs, 'spellcasting_ability');
         if (spellcastingVal != false) {
             actorData['data.attributes.spellcasting.value'] = this.getShortformAbility(spellcastingVal);
         }
@@ -563,6 +570,13 @@ class Roll20NpcImporter extends Application {
         actorData['data.traits.dv.value'] = this.getAttribute(npcData.attribs, 'npc_vulnerabilities');
         actorData['data.traits.ci.value'] = this.getAttribute(npcData.attribs, 'npc_condition_immunities');
 
+        if (actorData['data.traits.perception.value'] == false) actorData['data.traits.perception.value'] = '';
+        if (actorData['data.traits.languages.value'] == false) actorData['data.traits.languages.value'] = '';
+        if (actorData['data.traits.di.value'] == false) actorData['data.traits.di.value'] = '';
+        if (actorData['data.traits.dr.value'] == false) actorData['data.traits.dr.value'] = '';
+        if (actorData['data.traits.dv.value'] == false) actorData['data.traits.dv.value'] = '';
+        if (actorData['data.traits.ci.value'] == false) actorData['data.traits.ci.value'] = '';
+
         // set spellslots
         actorData['data.spells.spell1.value'] = this.getAttribute(npcData.attribs, 'lvl1_slots_total');
         actorData['data.spells.spell1.max'] = actorData['data.spells.spell1.value'];
@@ -596,28 +610,31 @@ class Roll20NpcImporter extends Application {
         actorData['data.resources.legact.max'] = legActions;
 
         // create and save items
+        let customSpellNames = {};
+
         if (Object.keys(spells).length > 0) {
             for (let spellId in spells) {
                 if (spells[spellId][this.translateAttribName('spellName')] == 'CANTRIPS' || spells[spellId][this.translateAttribName('spellName')].indexOf('LEVEL') != -1)
                     continue;
                 let spellName = spells[spellId][this.translateAttribName('spellName')];
                 if (this.spellCompendium !== null) {
-                    let spell = this.spellCompendium.index.find(e => e.name === spellName);
+                    let spell;
+                    await this.spellCompendium.getIndex().then(async index => {
+                        
+                        spell = index.find(e => e.name.toLowerCase() === spellName.toLowerCase() );
+                    });
                     if (spell != null && spell != undefined) {
-                        console.log('NPCImporter: Found Spell ' + spells[spellId].spellname + ' in compendium, using that');
-                        if (tempActor) {
-                            spell = await this.spellCompendium.getEntry(spell['id']);
-                            actorItems.push(spell);
-                        } else {
-                            actor.importItemFromCollection(this.spellCompendium.collection, spell['id']);
-                        }
+                        console.log('NPCImporter| Found Spell ' + spells[spellId].spellname + ' in compendium, using that');
+                        spell = await this.spellCompendium.getEntry(spell['id']);
+                        actorItems.push(spell);
                         continue;
                     }
                 }
-                //console.log(spells[spellId][this.translateAttribName('spelldescription')]);
-                let components = spells[spellId][this.translateAttribName('spellcomp')] == undefined ? '' : spells[spellId][this.translateAttribName('spellcomp')];
+                let ability = spells[spellId][this.translateAttribName('savingthrowability')] == undefined ? '' : this.getShortformAbility(spells[spellId][this.translateAttribName('savingthrowability')]);
+                let components = '';
                 let concentration = spells[spellId][this.translateAttribName('spellconcentration')] != null ? true : false;
                 let description = spells[spellId][this.translateAttribName('spelldescription')] != undefined ? spells[spellId][this.translateAttribName('spelldescription')] : spells[spellId][this.translateAttribName('spellcontent')];
+                description = '<p>' + description.replace('\n\n', '</p>\n<p>')+'</p>';
                 if (spells[spellId][this.translateAttribName('spellathigherlevels')] != undefined) description = description + '\n Cast at higher level:' + spells[spellId][this.translateAttribName('spellathigherlevels')];
                 let duration = spells[spellId][this.translateAttribName('spellduration')] == undefined ? '' : spells[spellId][this.translateAttribName('spellduration')];
                 let level = spells[spellId][this.translateAttribName('spelllevel')] == 'cantrip' ? 0 : spells[spellId][this.translateAttribName('spelllevel')];
@@ -633,14 +650,14 @@ class Roll20NpcImporter extends Application {
                 let target = spells[spellId][this.translateAttribName('spelltarget')] == undefined ? '' : spells[spellId][this.translateAttribName('spelltarget')] + '';
                 let time = spells[spellId][this.translateAttribName('spellcastingtime')] == undefined ? '' : spells[spellId][this.translateAttribName('spellcastingtime')] + '';
 
-
                 let save = spells[spellId][this.translateAttribName('spellsave')] != null ? this.getShortformAbility(spells[spellId][this.translateAttribName('spellsave')]) : '';
                 let ritual = spells[spellId][this.translateAttribName('spellritual')] != null ? true : false;
                 let damage = spells[spellId][this.translateAttribName('spelldamage')] == undefined ? '' : spells[spellId][this.translateAttribName('spelldamage')];
                 let damageType = spells[spellId][this.translateAttribName('spelldamagetype')] == undefined ? '' : spells[spellId][this.translateAttribName('spelldamagetype')].toLowerCase();
-                if (save == true) {
+                
+                if (save != '') {
                     spelltype = 'save';
-                } else if (spells[spellId].spelloutput = 'ATTACK') {
+                } else if (spells[spellId][this.translateAttribName('spellattack')] != undefined) {
                     spelltype = 'attack';
                 }
 
@@ -681,6 +698,17 @@ class Roll20NpcImporter extends Application {
                         }
                     }
                     components = newComponents;
+                } else {
+                    components = '';
+                    if (spells[spellId][this.translateAttribName('spellcompv')] != '0') {
+                        components = components + 'V ';
+                    }
+                    if (spells[spellId][this.translateAttribName('spellcomps')] != '0') {
+                        components = components + 'S ';
+                    }
+                    if (spells[spellId][this.translateAttribName('spellcompm')] != '0') {
+                        components = components + 'M';
+                    }
                 }
 
                 let spellObject = {
@@ -688,6 +716,7 @@ class Roll20NpcImporter extends Application {
                     type: "spell",
                     img: 'icons/mystery-man.png',
                     data: {
+                        ability: { type: "String", label: "Spellcasting Ability", value: ability },
                         components: { type: "String", label: "Spell Components", value: components },
                         concentration: { type: "Boolean", label: "Requires Concentration", value: concentration },
                         damage: { type: "String", label: "Spell Damage", value: damage },
@@ -716,6 +745,7 @@ class Roll20NpcImporter extends Application {
 
                 let name = attacks[attackId][this.translateAttribName('attName')] != undefined ? attacks[attackId][this.translateAttribName('attName')] : attacks[attackId][this.translateAttribName('attNameAlt')];
                 let description = attacks[attackId][this.translateAttribName('attDesc')] == undefined ? attacks[attackId][this.translateAttribName('attDecAlt')] : attacks[attackId][this.translateAttribName('attDesc')];
+                description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
                 let bonus = attacks[attackId][this.translateAttribName('attacktohit')] == undefined ? '' : (attacks[attackId][this.translateAttribName('attacktohit')] - actorData['data.attributes.prof.value'] - strMod);
                 let damage = attacks[attackId].attackdamage == undefined ? '' : attacks[attackId].attackdamage + '-' + strMod;
                 let damageType = attacks[attackId].attackdamagetype == undefined ? '' : attacks[attackId].attackdamagetype.toLowerCase();
@@ -771,6 +801,7 @@ class Roll20NpcImporter extends Application {
             for (let featId in feats) {
                 let name = feats[featId][this.translateAttribName('attName')] != undefined ? feats[featId][this.translateAttribName('attName')] : feats[featId][this.translateAttribName('attNameAlt')];
                 let description = feats[featId][this.translateAttribName('attDesc')] == undefined ? feats[featId][this.translateAttribName('attDecAlt')] : feats[featId][this.translateAttribName('attDesc')];
+                description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
                 let damage = feats[featId][this.translateAttribName('attackdamage')] == undefined ? '' : feats[featId][this.translateAttribName('attackdamage')] + '-' + strMod;
                 let damageType = feats[featId][this.translateAttribName('featdmgtype')] == undefined ? '' : feats[featId][this.translateAttribName('featdmgtype')].toLowerCase();
                 let range = feats[featId][this.translateAttribName('attackrange')] == undefined ? '' : feats[featId][this.translateAttribName('attackrange')];
@@ -815,7 +846,34 @@ class Roll20NpcImporter extends Application {
                     damageType = feats[featId][this.translateAttribName(damageType)] == undefined ? '' : feats[featId][this.translateAttribName(damageType)].toLowerCase();
 
                 }
+                
+                // reading spellslot details from spellcasting feature as a fallback
+                if (name == 'Spellcasting' && this.isOgl) {
+                    // looking for spellslot information
+                    for (let i = 1; i < 10; i++) {
+                        let regex;
+                        switch (i) {
+                            case 1: regex = new RegExp("(" + i + "st level \\()(\\d*)", 'gm'); break;
+                            case 2: regex = new RegExp("(" + i + "nd level \\()(\\d*)", 'gm'); break;
+                            case 3: regex = new RegExp("(" + i + "rd level \\()(\\d*)", 'gm'); break;
+                            default: regex = new RegExp("(" + i + "th level \\()(\\d*)", 'gm'); break;
+                        }
+                        let match = regex.exec(description);
+                        if (match != undefined && match.length >= 2 && match[2] != 0) {
+                            let spellSlotCount = match[2];
+                            if (actorData['data.spells.spell' + i + '.value'] != spellSlotCount) {
+                                actorData['data.spells.spell' + i + '.value'] = spellSlotCount;
+                                actorData['data.spells.spell' + i + '.max'] = spellSlotCount;
+                            }
+                        }                       
+                    }
 
+                    // at will spells
+                    customSpellNames = this.findAtWillSpells(customSpellNames, description);
+
+                    // x per day spells
+                    customSpellNames = this.findPerDaySpells(customSpellNames, description);                    
+                }
 
                 let featObject = {
                     name: name,
@@ -834,8 +892,27 @@ class Roll20NpcImporter extends Application {
                         time: { type: "String", label: "Casting Time", value: '' },
                         ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
-                };
+                }
+
                 actorItems.push(featObject);
+            }
+        }
+
+        if (this.isOgl == false) {
+            // at will spells
+            customSpellNames = this.findAtWillSpells(customSpellNames, this.getAttribute(npcData.attribs, 'innate_spellcasting_blurb'));
+
+            // x per day spells
+            customSpellNames = this.findPerDaySpells(customSpellNames, this.getAttribute(npcData.attribs, 'innate_spellcasting_blurb'));  
+        }
+
+        // apply custom spell tags (such as "at will" or "x/day")
+        for (let oldName in customSpellNames) {
+            for (let i in actorItems) {
+                let itemName = actorItems[i].name.toLowerCase();
+                if (itemName == oldName) {
+                    actorItems[i].name = this.fixUpperCase(customSpellNames[oldName]);
+                }
             }
         }
 
@@ -845,16 +922,20 @@ class Roll20NpcImporter extends Application {
             actorData['token.displayName'] = parseInt(this.showTokenName); 
             actorData['token.name'] = actorData['name'];
             actorData['token.img'] = npcTokenData['imgsrc'];
+            if (actorData['token.img'].indexOf('?') != -1) {
+                actorData['token.img'] = actorData['token.img'].split('?')[0];
+            }
             if (this.useTokenAsAvatar) {
                 actorData['img'] = actorData['token.img'];
             }
             actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
-            actorData['token.height'] = actorData['token.width']
-            if (npcTokenData['light_hassight'] == true) {
+            actorData['token.height'] = actorData['token.width'];
+
+            if (npcTokenData['light_hassight'] == true && this.ignoreTokenLight == false) {
                 actorData['token.dimSight'] = parseInt(npcTokenData['light_radius']);
                 actorData['token.brightSight'] = parseInt(npcTokenData['light_dimradius']);
             }
-            if (npcTokenData['light_otherplayers'] == true) {
+            if (npcTokenData['light_otherplayers'] == true && this.ignoreTokenLight == false) {
                 actorData['token.dimLight'] = parseInt(npcTokenData['light_radius']);
                 actorData['token.brightLight'] = parseInt(npcTokenData['light_dimradius']);
             }
@@ -1107,10 +1188,10 @@ class Roll20NpcImporter extends Application {
         try {
             let dice = new Roll(formula);
             dice.roll()
-            console.log('NPCImporter: Rolling for NPC health, formula: ' + formula + ', rollresult: ' + dice.total);
+            console.log('NPCImporter | Rolling for NPC health, formula: ' + formula + ', rollresult: ' + dice.total);
             return dice.total;
         } catch (e) {
-            console.log('NPCImporter: Rolling for NPC health failed, formula: ' + formula + 'setting the default healt value to ' + this.defaultHealth);
+            console.log('NPCImporter | Rolling for NPC health failed, formula: ' + formula + 'setting the default healt value to ' + this.defaultHealth);
             return this.defaultHealth;
         }
     }
@@ -1176,33 +1257,61 @@ class Roll20NpcImporter extends Application {
         }
         return name;
     }
+
+    findAtWillSpells(customSpells, searchString) {
+        let regex = new RegExp('(At will:)(.*)', 'gm');
+        let match = regex.exec(searchString);
+        if (match != undefined && match.length >= 2) {
+            match = match[2].trim().toLowerCase();
+            customSpells[match] = match + ' (at will)';
+        }
+        return customSpells;
+    }
+
+    findPerDaySpells(customSpells, searchString) {
+        let regex = new RegExp('(\\d*)(\/day each: )(.*)', 'gm');
+        let match = regex.exec(searchString);
+        if (match != undefined && match.length >= 3) {
+            let number = match[1];
+            let spells = match[3].split(',');
+            for (let spell of spells) {
+                let oldName;
+                let oldName2;
+                let newName;
+                if (spell.indexOf('(') != -1) {
+                    oldName = spell.split('(')[0].trim().toLowerCase();
+                    oldName2 = spell.trim(); // precaution in case the spell itself is named with the special tag
+                    let specialFeature = spell.split('(')[1].trim().toLowerCase().replace(')', '');
+                    newName = oldName + ' (' + number + '/day, ' + specialFeature + ')';
+                } else {
+                    oldName = spell.trim().toLowerCase();
+                    newName = oldName + ' (' + number + '/day)';
+                }
+                customSpells[oldName] = newName;
+                if (oldName2 != undefined) {
+                    customSpells[oldName2] = newName;
+                }
+            }
+
+        }
+        return customSpells;
+    }
 }
 
 let STAT_DICTIONARY = {    
     npc: ['npc', 'is_npc'],
-    npc_name: ['npc_name', 'shaped'],
     npc_challenge: ['npc_challenge', 'challenge'],
-    npc_type: ['npc_type', 'shaped'],
     npc_ac: ['npc_ac', 'AC'],
     npc_hpformula: ['npc_hpformula', 'hp_formula'],
     hp: ['hp', 'HP'],
-    npc_hpbase: ['npc_hpbase', 'shaped'],
-    initiative_bonus: ['initiative_bonus', 'shaped'],
     npc_speed: ['npc_speed', 'speed'],
-    spellcasting_ability: ['spellcasting_ability', 'shaped'],
-    npc_spelldc: ['npc_spelldc', 'shaped'],
+    spellcasting_ability: ['spellcasting_ability', 'spell_ability'],
     strength: ['strength', 'strength'],
-    npcd_str: ['npcd_str', 'shaped'],
     dexterity: ['dexterity', 'dexterity'],
-    npcd_dex: ['npcd_dex', 'shaped'],
     constitution: ['constitution', 'constitution'],
-    npcd_con: ['npcd_con', 'shaped'],
     intelligence: ['intelligence', 'intelligence'],
-    npcd_int: ['npcd_int', 'shaped'],
     wisdom: ['wisdom', 'wisdom'],
-    npcd_wis: ['npcd_wis', 'shaped'],
     charisma: ['charisma', 'charisma'],
-    npcd_cha: ['npcd_cha', 'shaped'],
     npc_str_save_flag: ['npc_str_save_flag', 'strength_saving_throw_proficient'],
     npc_dex_save_flag: ['npc_dex_save_flag', 'dexterity_saving_throw_proficient'],
     npc_con_save_flag: ['npc_con_save_flag', 'constitution_saving_throw_proficient'],
@@ -1252,7 +1361,6 @@ let STAT_DICTIONARY = {
     npc_languages: ['npc_languages', 'languages'],
     npc_immunities: ['npc_immunities', 'damage_immunities'],
     npc_resistances: ['npc_resistances', 'damage_resistances'],
-    npc_vulnerabilities: ['npc_vulnerabilities', 'shaped'],
     npc_condition_immunities: ['npc_condition_immunities', 'condition_immunities'],
     lvl1_slots_total: ['lvl1_slots_total', 'spell_level_1_slots'],
     lvl2_slots_total: ['lvl2_slots_total', 'spell_level_2_slots'],
@@ -1269,7 +1377,6 @@ let STAT_DICTIONARY = {
     spellName: ['spellname', 'name'],
     spellcomp: ['spellcomp', 'components'],
     spellconcentration: ['spellconcentration', 'concentration'],
-    spelldamage: ['spelldamage', ''],
     spelldamagetype: ['spelldamagetype', ''],
     spelldescription: ['spelldescription', 'content'],
     spellathigherlevels: ['spellathigherlevels', 'higherlevel'],
@@ -1277,42 +1384,27 @@ let STAT_DICTIONARY = {
     spelllevel: ['spelllevel', 'spelllevel'],
     spellcompmaterials: ['spellcompmaterials', 'materials'],
     spellrange: ['spellrange', 'range'],
-    spellritual: ['spellritual', ''],
-    spellsave: ['spellsave', 'savingthrowability'],
+    spellsave: ['spellsave', 'savingthrowvsability'],
     spellschool: ['spellschool', 'school'],
-    spelltarget: ['spelltarget', ''],
     spellcastingtime: ['spellcastingtime', 'castingtime'],
-    spelloutput: ['', 'spelloutput'],
-    savingthrowability: ['', 'savingthrowability'],
-    savingthrowdamagedice: ['', 'savingthrowdamagedice'],
-    savingthrowdamagedie: ['', 'savingthrowdamagedie'],
-    savingthrowdamagetype: ['', 'savingthrowdamagetype'],
     
     // attack info
     attName: ['name', 'name'],
     attNameAlt: ['namedisplay', 'name'],
     attDesc: ['description', 'content'],
     attDecAlt: ['desc', 'content'],
-    attacktohit: ['attacktohit', 'shaped'],
+    attacktohit: ['attacktohit', 'attackbonus'],
     attackdamage: ['attackdamage', ''],
     attackdamagetype: ['attackdamagetype', 'attackdamagetype'],
     attackdamage2: ['attackdamage2', ''],
     attackdamagetype2: ['attackdamagetype2', 'seconddamageability'],
     attackrange: ['attackrange', 'reach'],
-    attackability: ['', 'attackability'],
-    attackdamagedice: ['', 'attackdamagedice'],
-    attackdamagedie: ['', 'attackdamagedie'],
-    attack2damagedice: ['', 'secondattackdamagedice'],
-    attack2damagedie: ['', 'secondattackdamagedie'],
 
     // feats info
     featName: ['name', 'name'],
     featNameAlt: ['namedisplay', 'name'],
     featDesc: ['description', 'content'],
     featDecAlt: ['desc', 'content'],
-    featdamagedice: ['', 'otherdamagedice'],
-    featdamagedie: ['', 'otherdamagedie'],
-    featdmgtype: ['', 'otherdamagetype'],
 }
 
 let roll20NpcImporter = new Roll20NpcImporter();

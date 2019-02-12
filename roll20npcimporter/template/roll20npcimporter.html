@@ -12,9 +12,6 @@
             <li>Import the .json file</li>
         </ol>
         <!--<p><textarea class="npc-data form-control" cols="30" rows="5" autofocus placeholder="Paste your NPC data here"></textarea></p>-->
-        <div class="form-group">
-            <input type="file" name="fileUploads" accept=".json" multiple />
-        </div>
     </div>
     <div class="tab" data-tab="advanced">
         <h3 class="form-header">Options</h3>
@@ -37,11 +34,15 @@
         </div>
         <div class="form-group">
             <label>Use TokenImage as Avatar</label>
-            <input type="checkbox" name="useTokenAsAvatar" value="{{useTokenAsAvatar}}"/>
+            <input type="checkbox" name="useTokenAsAvatar" value="{{useTokenAsAvatar}}" />
         </div>
         <hr>
         <h3 class="form-header">Default Token Config</h3>
         <p class="notes">Configure the Token settings in case none can be found.</p>
+        <div class="form-group">
+            <label>Ignore Token Lighting:</label>
+            <input type="checkbox" class="bar-attribute" name="ignoreTokenLight" value="{{ignoreTokenLight}}" />
+        </div>
         <div class="form-group">
             <label>Show Nameplate:</label>
             <select class="bar-attribute" name="showNameMode" datad-type="Number">
@@ -105,5 +106,10 @@
             </select>
         </div>
     </div>
-    <input type="button" class="startImport btn" value="Import" />
+    <div class="form-group">
+        <input type="file" name="fileUploads" accept=".json" multiple />
+    </div>
+    <button class="startImport btn" value="Import" >
+        <i class='fas fa-check'></i> Import
+    </button>
 </div>
