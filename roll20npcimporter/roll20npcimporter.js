@@ -1,12 +1,7 @@
 /**
- * @author Felix Müller aka syl3r86
- * @version 0.3.3
+ * @author Felix MÃ¼ller aka syl3r86
+ * @version 0.3.4
  */
-
-/*
- * comp = game.packs.find(p => p.collection === "dnd5e.spells");
- * pack.importEntity(item);
- * */
 
 class Roll20NpcImporter extends Application {
 
@@ -634,12 +629,12 @@ class Roll20NpcImporter extends Application {
                 let components = '';
                 let concentration = spells[spellId][this.translateAttribName('spellconcentration')] != null ? true : false;
                 let description = spells[spellId][this.translateAttribName('spelldescription')] != undefined ? spells[spellId][this.translateAttribName('spelldescription')] : spells[spellId][this.translateAttribName('spellcontent')];
-                description = '<p>' + description.replace('\n\n', '</p>\n<p>')+'</p>';
+                if (description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>')+'</p>';
                 if (spells[spellId][this.translateAttribName('spellathigherlevels')] != undefined) description = description + '\n Cast at higher level:' + spells[spellId][this.translateAttribName('spellathigherlevels')];
                 let duration = spells[spellId][this.translateAttribName('spellduration')] == undefined ? '' : spells[spellId][this.translateAttribName('spellduration')];
                 let level = spells[spellId][this.translateAttribName('spelllevel')] == 'cantrip' ? 0 : spells[spellId][this.translateAttribName('spelllevel')];
-                if (this.isOgl == false) level = level[0];
-                if (level == 'C') level = 0;
+                if (this.isOgl == false && level != undefined) level = level.charAt(0);
+                if (level == 'C' || level == '' || level == undefined) level = 0;
                 let materials = spells[spellId][this.translateAttribName('spellcompmaterials')] == undefined ? '' : spells[spellId][this.translateAttribName('spellcompmaterials')];
                 let range = spells[spellId][this.translateAttribName('spellrange')] == undefined ? '' : spells[spellId][this.translateAttribName('spellrange')];
                 let school = 'abj';
@@ -745,7 +740,7 @@ class Roll20NpcImporter extends Application {
 
                 let name = attacks[attackId][this.translateAttribName('attName')] != undefined ? attacks[attackId][this.translateAttribName('attName')] : attacks[attackId][this.translateAttribName('attNameAlt')];
                 let description = attacks[attackId][this.translateAttribName('attDesc')] == undefined ? attacks[attackId][this.translateAttribName('attDecAlt')] : attacks[attackId][this.translateAttribName('attDesc')];
-                description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
+                if(description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
                 let bonus = attacks[attackId][this.translateAttribName('attacktohit')] == undefined ? '' : (attacks[attackId][this.translateAttribName('attacktohit')] - actorData['data.attributes.prof.value'] - strMod);
                 let damage = attacks[attackId].attackdamage == undefined ? '' : attacks[attackId].attackdamage + '-' + strMod;
                 let damageType = attacks[attackId].attackdamagetype == undefined ? '' : attacks[attackId].attackdamagetype.toLowerCase();
@@ -801,7 +796,7 @@ class Roll20NpcImporter extends Application {
             for (let featId in feats) {
                 let name = feats[featId][this.translateAttribName('attName')] != undefined ? feats[featId][this.translateAttribName('attName')] : feats[featId][this.translateAttribName('attNameAlt')];
                 let description = feats[featId][this.translateAttribName('attDesc')] == undefined ? feats[featId][this.translateAttribName('attDecAlt')] : feats[featId][this.translateAttribName('attDesc')];
-                description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
+                if (description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
                 let damage = feats[featId][this.translateAttribName('attackdamage')] == undefined ? '' : feats[featId][this.translateAttribName('attackdamage')] + '-' + strMod;
                 let damageType = feats[featId][this.translateAttribName('featdmgtype')] == undefined ? '' : feats[featId][this.translateAttribName('featdmgtype')].toLowerCase();
                 let range = feats[featId][this.translateAttribName('attackrange')] == undefined ? '' : feats[featId][this.translateAttribName('attackrange')];
@@ -1232,7 +1227,15 @@ class Roll20NpcImporter extends Application {
      * @param {String} string
      */
     fixUpperCase(string) {
-        return string.toLowerCase().replace(/(^|\s)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); })
+        if (string != undefined && string != false) {
+            return string.toLowerCase().replace(/(^|\s)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
+        } else {
+            if (string == false) {
+                return '';
+            } else {
+                return string;
+            }
+        }
     }
 
     /**
