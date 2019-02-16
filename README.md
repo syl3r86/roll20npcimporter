@@ -1,4 +1,4 @@
-# Roll20 NPC Importer, for 5e OGL
+# Roll20 NPC Importer, for 5e
 A module for FoundryVTT, used to import DND5e NPC sheets from the popular Roll20 application.
 Only works for 5e NPC characters that use the OGL sheet version.
 
