@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.3.4
+ * @version 0.3.5
  */
 
 class Roll20NpcImporter extends Application {
@@ -157,7 +157,7 @@ class Roll20NpcImporter extends Application {
      * Hook into the render call for the ActorList to add an extra button
      */
     hookActorList() {
-        Hooks.on('renderActorList', (app, html, data) => {
+        Hooks.on('renderActorDirectory', (app, html, data) => {
             const importButton = $('<button class="roll20-npc-import-list-btn" style="min-width: 96%;"><i class="fas fa-file-import"></i> NPC Import</button>');
 
             html.find('.roll20-npc-import-list-btn').remove();
