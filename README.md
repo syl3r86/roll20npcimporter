@@ -2,7 +2,13 @@
 A module for FoundryVTT, used to import DND5e NPC sheets from the popular Roll20 application.
 Only works for 5e NPC characters that use the OGL sheet version.
 
-Download and put the roll20npcimporter folder into FoundryVTT/public/modules
+Download and put the roll20npcimporter folder into FoundryVTT/public/modules and restart Foundry if it was running.
+You'll see this button in the actors list after correctly installing the module.
+
+![npc import button](https://i.imgur.com/EN6a9Ho.png)
+
+If it doesn't show up make sure you are the GM of the game. If you are, and it still won't show up, feel free to contact me.
+A common misconception is that the FVTT Enhancement Suit by Sillvva adds an import and export button as well, but these do not work with Data from Roll20. 
 
 Instructions to import NPCs from Roll20:
 1. Have the browser plugin VTT Enhancement Suit (https://ssstormy.github.io/roll20-enhancement-suite/features.html)
