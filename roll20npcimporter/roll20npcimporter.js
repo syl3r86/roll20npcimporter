@@ -1,13 +1,12 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.3.5
+ * @version 0.3.6
  */
 
 class Roll20NpcImporter extends Application {
 
     constructor(app) {
         super(app);
-
         this.hookActorList();
 
         // setting some default options here, change to your liking. Options will be available in the app too
@@ -389,8 +388,9 @@ class Roll20NpcImporter extends Application {
 
 
 
-        // set attributes
+        // set attributes 
         actorData['data.attributes.ac.value'] = this.getAttribute(npcData.attribs, 'npc_ac');
+        actorData['data.attributes.ac.formula'] = this.getAttribute(npcData.attribs, 'npc_actype');
         actorData['data.attributes.hp.formula'] = this.getAttribute(npcData.attribs, 'npc_hpformula') == false ? this.defaultHealth : this.getAttribute(npcData.attribs, 'npc_hpformula');
         let hp = 10;
         if (this.getAttribute(npcData.attribs, 'hp', true) != false) {
@@ -1305,6 +1305,7 @@ let STAT_DICTIONARY = {
     npc: ['npc', 'is_npc'],
     npc_challenge: ['npc_challenge', 'challenge'],
     npc_ac: ['npc_ac', 'AC'],
+    npc_actype: ['npc_actype', 'ac_note'],    
     npc_hpformula: ['npc_hpformula', 'hp_formula'],
     hp: ['hp', 'HP'],
     npc_speed: ['npc_speed', 'speed'],
