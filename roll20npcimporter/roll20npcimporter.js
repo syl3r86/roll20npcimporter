@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.3.6
+ * @version 0.3.7
  */
 
 class Roll20NpcImporter extends Application {
@@ -365,7 +365,11 @@ class Roll20NpcImporter extends Application {
         if (actorData['img'].indexOf('?') != -1) {
             actorData['img'] = actorData['img'].split('?')[0];
         }
-        actorData['data.details.cr.value'] = parseInt(this.getAttribute(npcData.attribs, 'npc_challenge')); // parsing has to be done here since the value is needed for calculations
+        let cr = this.getAttribute(npcData.attribs, 'npc_challenge');
+        if (cr.indexOf('/') != -1) {
+            cr = Number(cr.split('/')[0]) / Number(cr.split('/')[1]);
+        }
+        actorData['data.details.cr.value'] = Number(cr); // parsing has to be done here since the value is needed for calculations
         
         if (this.isOgl) {
             let npcType = this.cleanTypeString(this.getAttribute(npcData.attribs, 'npc_type'));
@@ -403,7 +407,7 @@ class Roll20NpcImporter extends Application {
         actorData['data.attributes.hp.value'] = hp;
         actorData['data.attributes.hp.max'] = hp;
         actorData['data.attributes.init.mod'] = this.getAttribute(npcData.attribs, 'initiative_bonus');
-        actorData['data.attributes.prof.value'] = Math.floor((7 + actorData['data.details.cr.value']) /4);
+        actorData['data.attributes.prof.value'] = Math.floor((7 + Math.ceil(actorData['data.details.cr.value'])) /4);
         actorData['data.attributes.speed.value'] = this.getAttribute(npcData.attribs, 'npc_speed');
         let spellcastingVal = this.getAttribute(npcData.attribs, 'spellcasting_ability');
         if (spellcastingVal != false) {
