@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.3.7
+ * @version 0.3.9
  */
 
 class Roll20NpcImporter extends Application {
@@ -366,7 +366,7 @@ class Roll20NpcImporter extends Application {
             actorData['img'] = actorData['img'].split('?')[0];
         }
         let cr = this.getAttribute(npcData.attribs, 'npc_challenge');
-        if (cr.indexOf('/') != -1) {
+        if (typeof cr == 'string' && cr.indexOf('/') != -1) {
             cr = Number(cr.split('/')[0]) / Number(cr.split('/')[1]);
         }
         actorData['data.details.cr.value'] = Number(cr); // parsing has to be done here since the value is needed for calculations
@@ -613,9 +613,12 @@ class Roll20NpcImporter extends Application {
 
         if (Object.keys(spells).length > 0) {
             for (let spellId in spells) {
-                if (spells[spellId][this.translateAttribName('spellName')] == 'CANTRIPS' || spells[spellId][this.translateAttribName('spellName')].indexOf('LEVEL') != -1)
+                if (this.isOgl && (spells[spellId][this.translateAttribName('spellName')] == 'CANTRIPS' || spells[spellId][this.translateAttribName('spellName')].indexOf('LEVEL') != -1))
                     continue;
                 let spellName = spells[spellId][this.translateAttribName('spellName')];
+                if (spellName == undefined) {
+                    continue;
+                }
                 if (this.spellCompendium !== null) {
                     let spell;
                     await this.spellCompendium.getIndex().then(async index => {
@@ -793,7 +796,6 @@ class Roll20NpcImporter extends Application {
                         ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
                 };
-                actorItems.push(attackObject);
             }
         }
         if (Object.keys(feats).length > 0) {
