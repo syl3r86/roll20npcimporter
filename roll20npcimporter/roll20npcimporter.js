@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.3.9
+ * @version 0.4
  */
 
 class Roll20NpcImporter extends Application {
@@ -43,6 +43,7 @@ class Roll20NpcImporter extends Application {
 
     static get defaultOptions() {
         const options = super.defaultOptions;
+        options.classes = options.classes.concat(["r20-importer"]);
         options.template = "public/modules/roll20npcimporter/template/roll20npcimporter.html";
         options.width = 500;
         options.height = "auto";
@@ -355,7 +356,6 @@ class Roll20NpcImporter extends Application {
                 feats[regionalId] = regional[regionalId];
             }
         }
-
         // set details
         actorData['name'] = this.getAttribute(npcData.attribs, 'npc_name');
         if (actorData['name'] == false) {
@@ -388,6 +388,9 @@ class Roll20NpcImporter extends Application {
         if (npcData.gmnotes != '') {
             bio = bio + '\n<p><strong>GM Notes:</strong></p>\n<p>' + npcData.gmnotes + '</p>';
         }
+        bio = unescape(bio);
+        bio = bio.replace(/(<a)[^>]*(>)/g, '');
+        bio = bio.replace("</a>", '');
         actorData['data.details.biography.value'] = bio;
 
 
@@ -796,6 +799,7 @@ class Roll20NpcImporter extends Application {
                         ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
                 };
+                actorItems.push(attackObject);
             }
         }
         if (Object.keys(feats).length > 0) {
