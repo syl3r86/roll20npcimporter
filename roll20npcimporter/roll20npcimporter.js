@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.4.1
+ * @version 0.4.2
  */
 
 class Roll20NpcImporter extends Application {
@@ -148,8 +148,9 @@ class Roll20NpcImporter extends Application {
             if (npcString != undefined && npcString != '')
                 npcs.push(npcString);
 
+            ui.notifications.info("Started Importing");
             for (let npc of npcs) {
-                this.importNpc(npc, targetMode, targetCompendium);
+                await this.importNpc(npc, targetMode, targetCompendium);
             }
             this.close();
             Promise.resolve();
@@ -233,13 +234,17 @@ class Roll20NpcImporter extends Application {
                     console.log('NPCImporter | Could not find compendium with the name ' + compendiumName);
                 } else {
                     console.log("NPCImporter | Importing npc named " + tmpActor.name);
-                    compendium.importEntity(tmpActor);
+                    //compendium.importEntity(tmpActor);
+                    Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false }).then(async actor => {
+                        await this.createActorItems(actor, tmpActor.data.items, true);
+                        compendium.importEntity(actor);
+                        actor.delete();
+                    });
                 }
             } else {
                 console.log('NPCImporter | No compendium name was given');
             }
         } else {
-            let npcName = this.getAttribute(npcData.attribs, 'npc_name');
             console.log("NPCImporter | creating npc named " + tmpActor.name);
             Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false }).then(async actor => {
                 this.createActorItems(actor, tmpActor.data.items, true);
