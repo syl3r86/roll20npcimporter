@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.4.2
+ * @version 0.4.3
  */
 
 class Roll20NpcImporter extends Application {
@@ -234,12 +234,7 @@ class Roll20NpcImporter extends Application {
                     console.log('NPCImporter | Could not find compendium with the name ' + compendiumName);
                 } else {
                     console.log("NPCImporter | Importing npc named " + tmpActor.name);
-                    //compendium.importEntity(tmpActor);
-                    Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false }).then(async actor => {
-                        await this.createActorItems(actor, tmpActor.data.items, true);
-                        compendium.importEntity(actor);
-                        actor.delete();
-                    });
+                    compendium.importEntity(tmpActor);
                 }
             } else {
                 console.log('NPCImporter | No compendium name was given');
@@ -247,7 +242,7 @@ class Roll20NpcImporter extends Application {
         } else {
             console.log("NPCImporter | creating npc named " + tmpActor.name);
             Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false }).then(async actor => {
-                this.createActorItems(actor, tmpActor.data.items, true);
+                this.createActorItems(actor, tmpActor.data.items);
             });
         }
     }
@@ -1019,13 +1014,7 @@ class Roll20NpcImporter extends Application {
             console.error(e.message);
         }
         
-        
-
-        // save data to actor
-        //await this.createActorItems(actor, actorItems, tempActor);
-        //actor.update(actorData);
-
-        this.createActorItems(actorData, actorItems, true);
+        await this.createActorItems(actorData, actorItems);
         return actorData;
     }
 
@@ -1230,18 +1219,18 @@ class Roll20NpcImporter extends Application {
      * @param {Object} actor - the actor object that gets the items
      * @param {Object} items - an object representing the item
      */
-    async createActorItems(actor, items, tempActor) {
+    async createActorItems(actor, items) {
         let itemCount = 0;
         for (let item of items) {
             itemCount++;
-            if (tempActor) {
-                let tempItem = await Item.create(item, { temporary: true, displaySheet: false });
-                tempItem = tempItem.data;
-                tempItem["id"] = itemCount;
-                actor.data.items.push(tempItem);
+            let tempItem = await Item.create(item, { temporary: true, displaySheet: false });
+            tempItem = tempItem.data;
+            tempItem["id"] = itemCount;
+            actor.data.items.push(tempItem);
+            /*if (tempActor) {
             } else {
                 await actor.createOwnedItem(item, true);
-            }
+            }*/
         }
     }
 
