@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.4
+ * @version 0.4.1
  */
 
 class Roll20NpcImporter extends Application {
@@ -37,6 +37,10 @@ class Roll20NpcImporter extends Application {
 
         this.useTokenAsAvatar = false;
         this.ignoreTokenLight = false;
+
+        this.useFolderPictures = false;
+        this.avatarImgPath = '';
+        this.tokenImgPath = '';
 
         this.isOgl = true;
     }
@@ -77,6 +81,9 @@ class Roll20NpcImporter extends Application {
             defaultHealth: this.defaultHealth, 
             defaultSource: this.defaultSource,
             useTokenAsAvatar: this.useTokenAsAvatar,
+            useFolderPictures: this.useFolderPictures,
+            avatarImgPath: this.avatarImgPath,
+            tokenImgPath: this.tokenImgPath,
             ignoreTokenLight: this.ignoreTokenLight,
             tokenBar1Link: this.tokenBar1Link,
             tokenBar2Link: this.tokenBar2Link,
@@ -104,6 +111,10 @@ class Roll20NpcImporter extends Application {
             this.defaultHealth = html.find("input[name=defaultHealth]").val();
             this.defaultSource = html.find("input[name=defaultSource]").val();
             this.useTokenAsAvatar = html.find("input[name=useTokenAsAvatar]").prop("checked");
+
+            this.useFolderPictures = html.find("input[name=useFolderPictures]").prop("checked");
+            this.avatarImgPath = html.find("input[name=avatarImgPath]").val();
+            this.tokenImgPath = html.find("input[name=tokenImgPath]").val();
 
             this.showTokenName = html.find("select[name=showNameMode]").val();
             this.showTokenBars = html.find("select[name=showBarMode]").val();
@@ -149,6 +160,16 @@ class Roll20NpcImporter extends Application {
                 html.find("select[name=compendiumName]").parent().hide(250);
             } else {
                 html.find("select[name=compendiumName]").parent().show(250);
+            }
+        });
+
+        html.find('input[name=useFolderPictures]').click(ev => {
+            if (html.find('input[name=useFolderPictures]').prop("checked")) {
+                html.find("input[name=avatarImgPath]").parent().show(250);
+                html.find("input[name=tokenImgPath]").parent().show(250);
+            } else {
+                html.find("input[name=avatarImgPath]").parent().hide(250);
+                html.find("input[name=tokenImgPath]").parent().hide(250);
             }
         });
     }
@@ -204,38 +225,54 @@ class Roll20NpcImporter extends Application {
 
         // create actor if required
         // TODO: change this part for compendium storage
-        let actor = null;
+        let tmpActor = await this.parseNpcData(npcData);
         if (targetMode == 'compendium') {
             if (compendiumName != '') {
                 let compendium = game.packs.find(p => p.collection === compendiumName);
                 if (compendium == null || compendium == undefined) {
                     console.log('NPCImporter | Could not find compendium with the name ' + compendiumName);
                 } else {
-                    let npcName = this.getAttribute(npcData.attribs, 'npc_name');
-                    console.log("NPCImporter | Creating npc named " + npcName);
-                    let npc = Actor5e.create({ name: npcName, type: 'npc' }, { temporary: true, displaySheet: false }).then(async actor => {
-                        await this.parseNpcData(actor, npcData, true);
-                        console.log("NPCImporter | Importing into the compendium");
-                        compendium.importEntity(actor);
-                        //actor.delete();
-                    });
+                    console.log("NPCImporter | Importing npc named " + tmpActor.name);
+                    compendium.importEntity(tmpActor);
                 }
             } else {
                 console.log('NPCImporter | No compendium name was given');
             }
         } else {
             let npcName = this.getAttribute(npcData.attribs, 'npc_name');
-            console.log("NPCImporter | creating npc named " + npcName);
-            Actor5e.create({ name: npcName, type: 'npc' }, { temporary: false, displaySheet:false }).then(async actor => {
-                actor.render(false);
-                await this.parseNpcData(actor, npcData, false);
+            console.log("NPCImporter | creating npc named " + tmpActor.name);
+            Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false }).then(async actor => {
+                this.createActorItems(actor, tmpActor.data.items, true);
             });
         }
     }
 
-    async parseNpcData(actor, npcData, tempActor) {
+    async parseNpcData(importData) {
         console.log("NPCImporter | Parsing data");
-        let actorData = {};
+
+        // create temp actor to store everything as it gets created
+        let name = this.getAttribute(importData.attribs, 'npc_name');
+        let image = '';
+        let tokenImage = '';
+        if (this.useFolderPictures) {
+            image = this.avatarImgPath.replace('@name', escape(name));
+            tokenImage = this.tokenImgPath.replace('@name', escape(name));
+        } else {
+            image = importData.avatar
+            try {
+                let npcTokenData = JSON.parse(importData.defaulttoken.replace('\\', ''));
+                tokenImage = npcTokenData.imgsrc;
+            } catch (e) {
+                console.log("NPCImporter | Could not parse Token Data");
+            }
+        }
+        
+
+        if (this.useTokenAsAvatar && tokenImage !== '') {
+            image = tokenImage;
+        }
+        let actorData = await Actor5e.create({ name: name, img: image, type: 'npc' }, { temporary: true, displaySheet: false });
+
 
         // prepare repeating items
         let actorItems = [];
@@ -249,7 +286,7 @@ class Roll20NpcImporter extends Application {
         let regional = {};
 
 
-        npcData.attribs.forEach(entry => {
+        importData.attribs.forEach(entry => {
             if (entry.name.indexOf('repeating') != -1) {
                 let splitEntry = entry.name.split('_')
                 let entryType = splitEntry[1]
@@ -307,8 +344,8 @@ class Roll20NpcImporter extends Application {
                         break;
                 }
                 if (typeof (entry.current) == 'string' && entry.current.indexOf('Legendary Resistance (') >= 0) {
-                    actorData['data.resources.legres.value'] = entry.current.match(/\d+/);
-                    actorData['data.resources.legres.max'] = entry.current.match(/\d+/);
+                    actorData.data.data.resources.legres.value = entry.current.match(/\d+/);
+                    actorData.data.data.resources.legres.max = entry.current.match(/\d+/);
                 }
             }
         });
@@ -357,259 +394,272 @@ class Roll20NpcImporter extends Application {
             }
         }
         // set details
-        actorData['name'] = this.getAttribute(npcData.attribs, 'npc_name');
-        if (actorData['name'] == false) {
-            actorData['name'] = npcData.name;
-        }
-        actorData['img'] = npcData.avatar;
-        if (actorData['img'].indexOf('?') != -1) {
-            actorData['img'] = actorData['img'].split('?')[0];
-        }
-        let cr = this.getAttribute(npcData.attribs, 'npc_challenge');
+        let cr = this.getAttribute(importData.attribs, 'npc_challenge');
         if (typeof cr == 'string' && cr.indexOf('/') != -1) {
             cr = Number(cr.split('/')[0]) / Number(cr.split('/')[1]);
         }
-        actorData['data.details.cr.value'] = Number(cr); // parsing has to be done here since the value is needed for calculations
+        actorData.data.data.details.cr.value = Number(cr); // parsing has to be done here since the value is needed for calculations
         
         if (this.isOgl) {
-            let npcType = this.cleanTypeString(this.getAttribute(npcData.attribs, 'npc_type'));
-            actorData['data.details.type.value'] = this.fixUpperCase(npcType.type);
-            actorData['data.details.alignment.value'] = this.fixUpperCase(npcType.alignment);
-            actorData['data.details.source.value'] = this.defaultSource;
-            actorData['data.traits.size.value'] = this.fixUpperCase(npcType.size)
+            let npcType = this.cleanTypeString(this.getAttribute(importData.attribs, 'npc_type'));
+            actorData.data.data.details.type.value = this.fixUpperCase(npcType.type);
+            actorData.data.data.details.alignment.value = this.fixUpperCase(npcType.alignment);
+            actorData.data.data.details.source.value = this.defaultSource;
+            actorData.data.data.traits.size.value = npcType.size
         } else {
-            actorData['data.details.type.value'] = this.fixUpperCase(this.getAttribute(npcData.attribs, 'type'));
-            actorData['data.details.alignment.value'] = this.fixUpperCase(this.getAttribute(npcData.attribs, 'alignment'));
-            actorData['data.details.source.value'] = this.defaultSource;
-            actorData['data.traits.size.value'] = this.fixUpperCase(this.getAttribute(npcData.attribs, 'size'));
+            actorData.data.data.details.type.value = this.fixUpperCase(this.getAttribute(importData.attribs, 'type'));
+            actorData.data.data.details.alignment.value = this.fixUpperCase(this.getAttribute(importData.attribs, 'alignment'));
+            actorData.data.data.details.source.value = this.defaultSource;
+            actorData.data.data.traits.size.value = this.fixUpperCase(this.getAttribute(importData.attribs, 'size'));
         }
 
-        let bio = npcData.bio;
-        if (npcData.gmnotes != '') {
-            bio = bio + '\n<p><strong>GM Notes:</strong></p>\n<p>' + npcData.gmnotes + '</p>';
+        let bio = importData.bio;
+        if (importData.gmnotes != '') {
+            bio = bio + '\n<p><strong>GM Notes:</strong></p>\n<p>' + importData.gmnotes + '</p>';
         }
         bio = unescape(bio);
         bio = bio.replace(/(<a)[^>]*(>)/g, '');
         bio = bio.replace("</a>", '');
-        actorData['data.details.biography.value'] = bio;
+        actorData.data.data.details.biography.value = bio;
 
 
 
         // set attributes 
-        actorData['data.attributes.ac.value'] = this.getAttribute(npcData.attribs, 'npc_ac');
-        actorData['data.attributes.ac.formula'] = this.getAttribute(npcData.attribs, 'npc_actype');
-        actorData['data.attributes.hp.formula'] = this.getAttribute(npcData.attribs, 'npc_hpformula') == false ? this.defaultHealth : this.getAttribute(npcData.attribs, 'npc_hpformula');
+        actorData.data.data.attributes.ac.value = this.getAttribute(importData.attribs, 'npc_ac');
+        actorData.data.data.attributes.ac.formula = this.getAttribute(importData.attribs, 'npc_actype');
+        actorData.data.data.attributes.hp.formula = this.getAttribute(importData.attribs, 'npc_hpformula') == false ? this.defaultHealth : this.getAttribute(importData.attribs, 'npc_hpformula');
         let hp = 10;
-        if (this.getAttribute(npcData.attribs, 'hp', true) != false) {
-            hp = this.getAttribute(npcData.attribs, 'hp', true);
-        } else if (this.getAttribute(npcData.attribs, 'npc_hpbase') != false) {
-            hp = this.getAttribute(npcData.attribs, 'npc_hpbase');
+        if (this.getAttribute(importData.attribs, 'hp', true) != false) {
+            hp = this.getAttribute(importData.attribs, 'hp', true);
+        } else if (this.getAttribute(importData.attribs, 'npc_hpbase') != false) {
+            hp = this.getAttribute(importData.attribs, 'npc_hpbase');
         } else {
-            hp = this.setDefaultHealth(actorData['data.attributes.hp.formula']);
+            hp = this.setDefaultHealth(actorData.data.data.attributes.hp.formula);
         }
-        actorData['data.attributes.hp.value'] = hp;
-        actorData['data.attributes.hp.max'] = hp;
-        actorData['data.attributes.init.mod'] = this.getAttribute(npcData.attribs, 'initiative_bonus');
-        actorData['data.attributes.prof.value'] = Math.floor((7 + Math.ceil(actorData['data.details.cr.value'])) /4);
-        actorData['data.attributes.speed.value'] = this.getAttribute(npcData.attribs, 'npc_speed');
-        let spellcastingVal = this.getAttribute(npcData.attribs, 'spellcasting_ability');
+        actorData.data.data.attributes.hp.value = hp;
+        actorData.data.data.attributes.hp.max = hp;
+        actorData.data.data.attributes.init.mod = this.getAttribute(importData.attribs, 'initiative_bonus');
+        actorData.data.data.attributes.prof.value = Math.floor((7 + Math.ceil(actorData.data.data.details.cr.value)) /4);
+        actorData.data.data.attributes.speed.value = this.getAttribute(importData.attribs, 'npc_speed');
+        let spellcastingVal = this.getAttribute(importData.attribs, 'spellcasting_ability');
         if (spellcastingVal != false) {
-            actorData['data.attributes.spellcasting.value'] = this.getShortformAbility(spellcastingVal);
+            actorData.data.data.attributes.spellcasting.value = this.getShortformAbility(spellcastingVal);
         }
-        actorData['data.attributes.spelldc.value'] = this.getAttribute(npcData.attribs, 'npc_spelldc');
+        actorData.data.data.attributes.spelldc.value = this.getAttribute(importData.attribs, 'npc_spelldc');
 
         // set abilities
         let abilityValue = {};
 
-        actorData['data.abilities.str.value'] = this.getAttribute(npcData.attribs, 'strength');
-        if (actorData['data.abilities.str.value'] == false) {
-            actorData['data.abilities.str.value'] = this.getAttribute(npcData.attribs, 'npcd_str');
+        actorData.data.data.abilities.str.value = this.getAttribute(importData.attribs, 'strength');
+        if (actorData.data.data.abilities.str.value == false) {
+            actorData.data.data.abilities.str.value = this.getAttribute(importData.attribs, 'npcd_str');
         }
 
-        actorData['data.abilities.dex.value'] = this.getAttribute(npcData.attribs, 'dexterity');
-        if (actorData['data.abilities.dex.value'] == false) {
-            actorData['data.abilities.dex.value'] = this.getAttribute(npcData.attribs, 'npcd_dex');
+        actorData.data.data.abilities.dex.value = this.getAttribute(importData.attribs, 'dexterity');
+        if (actorData.data.data.abilities.dex.value == false) {
+            actorData.data.data.abilities.dex.value = this.getAttribute(importData.attribs, 'npcd_dex');
         }
 
-        actorData['data.abilities.con.value'] = this.getAttribute(npcData.attribs, 'constitution');
-        if (actorData['data.abilities.con.value'] == false) {
-            actorData['data.abilities.con.value'] = this.getAttribute(npcData.attribs, 'npcd_con');
+        actorData.data.data.abilities.con.value = this.getAttribute(importData.attribs, 'constitution');
+        if (actorData.data.data.abilities.con.value == false) {
+            actorData.data.data.abilities.con.value = this.getAttribute(importData.attribs, 'npcd_con');
         }
 
-        actorData['data.abilities.int.value'] = this.getAttribute(npcData.attribs, 'intelligence');
-        if (actorData['data.abilities.int.value'] == false) {
-            actorData['data.abilities.int.value'] = this.getAttribute(npcData.attribs, 'npcd_int');
+        actorData.data.data.abilities.int.value = this.getAttribute(importData.attribs, 'intelligence');
+        if (actorData.data.data.abilities.int.value == false) {
+            actorData.data.data.abilities.int.value = this.getAttribute(importData.attribs, 'npcd_int');
         }
 
-        actorData['data.abilities.wis.value'] = this.getAttribute(npcData.attribs, 'wisdom');
-        if (actorData['data.abilities.wis.value'] == false) {
-            actorData['data.abilities.wis.value'] = this.getAttribute(npcData.attribs, 'npcd_wis');
+        actorData.data.data.abilities.wis.value = this.getAttribute(importData.attribs, 'wisdom');
+        if (actorData.data.data.abilities.wis.value == false) {
+            actorData.data.data.abilities.wis.value = this.getAttribute(importData.attribs, 'npcd_wis');
         }
 
-        actorData['data.abilities.cha.value'] = this.getAttribute(npcData.attribs, 'charisma');
-        if (actorData['data.abilities.cha.value'] == false) {
-            actorData['data.abilities.cha.value'] = this.getAttribute(npcData.attribs, 'npcd_cha');
+        actorData.data.data.abilities.cha.value = this.getAttribute(importData.attribs, 'charisma');
+        if (actorData.data.data.abilities.cha.value == false) {
+            actorData.data.data.abilities.cha.value = this.getAttribute(importData.attribs, 'npcd_cha');
         }
 
         // set saving throws
-        if (this.getAttribute(npcData.attribs, 'npc_str_save_flag') != '0')
-            actorData['data.abilities.str.proficient'] = 1;
-        if (this.getAttribute(npcData.attribs, 'npc_dex_save_flag') != '0')
-            actorData['data.abilities.dex.proficient'] = 1;
-        if (this.getAttribute(npcData.attribs, 'npc_con_save_flag') != '0')
-            actorData['data.abilities.con.proficient'] = 1;
-        if (this.getAttribute(npcData.attribs, 'npc_int_save_flag') != '0')
-            actorData['data.abilities.int.proficient'] = 1;
-        if (this.getAttribute(npcData.attribs, 'npc_wis_save_flag') != '0')
-            actorData['data.abilities.wis.proficient'] = 1;
-        if (this.getAttribute(npcData.attribs, 'npc_int_save_flag') != '0')
-            actorData['data.abilities.cha.proficient'] = 1;
+        if (this.getAttribute(importData.attribs, 'npc_str_save_flag') != '0')
+            actorData.data.data.abilities.str.proficient = 1;
+        if (this.getAttribute(importData.attribs, 'npc_dex_save_flag') != '0')
+            actorData.data.data.abilities.dex.proficient = 1;
+        if (this.getAttribute(importData.attribs, 'npc_con_save_flag') != '0')
+            actorData.data.data.abilities.con.proficient = 1;
+        if (this.getAttribute(importData.attribs, 'npc_int_save_flag') != '0')
+            actorData.data.data.abilities.int.proficient = 1;
+        if (this.getAttribute(importData.attribs, 'npc_wis_save_flag') != '0')
+            actorData.data.data.abilities.wis.proficient = 1;
+        if (this.getAttribute(importData.attribs, 'npc_int_save_flag') != '0')
+            actorData.data.data.abilities.cha.proficient = 1;
 
         // set proficiencies
-        if (this.getAttribute(npcData.attribs, 'npc_acrobatics_flag') != 0)
-            actorData['data.skills.acr.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_acrobatics'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.dex.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_animal_handling_flag') != 0)
-            actorData['data.skills.ani.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_animal_handling'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.wis.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_arcana_flag') != 0)
-            actorData['data.skills.arc.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_arcana'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.int.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_athletics_flag') != 0)
-            actorData['data.skills.ath.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_athletics'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.dex.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_deception_flag') != 0)
-            actorData['data.skills.dec.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_deception'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.cha.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_history_flag') != 0)
-            actorData['data.skills.his.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_history'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.int.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_insight_flag') != 0)
-            actorData['data.skills.ins.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_insight'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.wis.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_intimidation_flag') != 0)
-            actorData['data.skills.itm.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_intimidation'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.cha.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_investigation_flag') != 0)
-            actorData['data.skills.inv.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_investigation'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.int.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_medicine_flag') != 0)
-            actorData['data.skills.med.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_medicine'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.wis.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_nature_flag') != 0)
-            actorData['data.skills.nat.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_nature'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.int.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_perception_flag') != 0)
-            actorData['data.skills.prc.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_perception'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.wis.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_performance_flag') != 0)
-            actorData['data.skills.prf.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_performance'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.cha.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_persuasion_flag') != 0)
-            actorData['data.skills.per.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_persuasion'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.cha.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_religion_flag') != 0)
-            actorData['data.skills.rel.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_religion'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.int.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_sleight_of_hand_flag') != 0)
-            actorData['data.skills.slt.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_sleight_of_hand'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.dex.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_stealth_flag') != 0)
-            actorData['data.skills.ste.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_stealth'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.dex.value']);
-        if (this.getAttribute(npcData.attribs, 'npc_survival_flag') != 0)
-            actorData['data.skills.sur.value'] = this.getSkillProficiencyMultiplyer(
-                this.getAttribute(npcData.attribs, 'npc_survival'),
-                actorData['data.attributes.prof.value'],
-                actorData['data.abilities.wis.value']);
+        if (this.getAttribute(importData.attribs, 'npc_acrobatics_flag') != 0)
+            actorData.data.data.skills.acr.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_acrobatics'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.dex.value);
+        if (this.getAttribute(importData.attribs, 'npc_animal_handling_flag') != 0)
+            actorData.data.data.skills.ani.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_animal_handling'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.wis.value);
+        if (this.getAttribute(importData.attribs, 'npc_arcana_flag') != 0)
+            actorData.data.data.skills.arc.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_arcana'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.int.value);
+        if (this.getAttribute(importData.attribs, 'npc_athletics_flag') != 0)
+            actorData.data.data.skills.ath.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_athletics'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.dex.value);
+        if (this.getAttribute(importData.attribs, 'npc_deception_flag') != 0)
+            actorData.data.data.skills.dec.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_deception'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.cha.value);
+        if (this.getAttribute(importData.attribs, 'npc_history_flag') != 0)
+            actorData.data.data.skills.his.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_history'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.int.value);
+        if (this.getAttribute(importData.attribs, 'npc_insight_flag') != 0)
+            actorData.data.data.skills.ins.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_insight'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.wis.value);
+        if (this.getAttribute(importData.attribs, 'npc_intimidation_flag') != 0)
+            actorData.data.data.skills.itm.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_intimidation'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.cha.value);
+        if (this.getAttribute(importData.attribs, 'npc_investigation_flag') != 0)
+            actorData.data.data.skills.inv.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_investigation'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.int.value);
+        if (this.getAttribute(importData.attribs, 'npc_medicine_flag') != 0)
+            actorData.data.data.skills.med.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_medicine'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.wis.value);
+        if (this.getAttribute(importData.attribs, 'npc_nature_flag') != 0)
+            actorData.data.data.skills.nat.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_nature'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.int.value);
+        if (this.getAttribute(importData.attribs, 'npc_perception_flag') != 0)
+            actorData.data.data.skills.prc.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_perception'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.wis.value);
+        if (this.getAttribute(importData.attribs, 'npc_performance_flag') != 0)
+            actorData.data.data.skills.prf.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_performance'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.cha.value);
+        if (this.getAttribute(importData.attribs, 'npc_persuasion_flag') != 0)
+            actorData.data.data.skills.per.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_persuasion'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.cha.value);
+        if (this.getAttribute(importData.attribs, 'npc_religion_flag') != 0)
+            actorData.data.data.skills.rel.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_religion'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.int.value);
+        if (this.getAttribute(importData.attribs, 'npc_sleight_of_hand_flag') != 0)
+            actorData.data.data.skills.slt.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_sleight_of_hand'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.dex.value);
+        if (this.getAttribute(importData.attribs, 'npc_stealth_flag') != 0)
+            actorData.data.data.skills.ste.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_stealth'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.dex.value);
+        if (this.getAttribute(importData.attribs, 'npc_survival_flag') != 0)
+            actorData.data.data.skills.sur.value = this.getSkillProficiencyMultiplyer(
+                this.getAttribute(importData.attribs, 'npc_survival'),
+                actorData.data.data.attributes.prof.value,
+                actorData.data.data.abilities.wis.value);
 
 
         // set traits
-        actorData['data.traits.senses.value'] = this.getAttribute(npcData.attribs, 'npc_senses');
+        actorData.data.data.traits.senses.value = this.getAttribute(importData.attribs, 'npc_senses');
 
-        let passivePerception = 10 + Math.floor((actorData['data.abilities.wis.value'] - 10) / 2);
-        if (actorData['data.skills.prc.value'] != undefined) {
-            passivePerception = passivePerception + (actorData['data.attributes.prof.value'] * actorData['data.skills.prc.value']);
+        let passivePerception = 10 + Math.floor((actorData.data.data.abilities.wis.value - 10) / 2);
+        if (actorData.data.data.skills.prc.value != undefined) {
+            passivePerception = passivePerception + (actorData.data.data.attributes.prof.value * actorData.data.data.skills.prc.value);
         }
-        actorData['data.traits.perception.value'] = passivePerception;
-        actorData['data.traits.languages.value'] = this.getAttribute(npcData.attribs, 'npc_languages');
-        actorData['data.traits.di.value'] = this.getAttribute(npcData.attribs, 'npc_immunities');
-        actorData['data.traits.dr.value'] = this.getAttribute(npcData.attribs, 'npc_resistances');
-        actorData['data.traits.dv.value'] = this.getAttribute(npcData.attribs, 'npc_vulnerabilities');
-        actorData['data.traits.ci.value'] = this.getAttribute(npcData.attribs, 'npc_condition_immunities');
+        actorData.data.data.traits.perception.value = passivePerception;
+        actorData.data.data.traits.di.value = this.getAttribute(importData.attribs, 'npc_immunities').toLowerCase().split(', ');
+        actorData.data.data.traits.dr.value = this.getAttribute(importData.attribs, 'npc_resistances').toLowerCase().split(', ');
+        actorData.data.data.traits.dv.value = this.getAttribute(importData.attribs, 'npc_vulnerabilities').toLowerCase().split(', ');
+        actorData.data.data.traits.ci.value = this.getAttribute(importData.attribs, 'npc_condition_immunities').toLowerCase().split(', ');
+        if (actorData.data.data.traits.perception.value == false) actorData.data.data.traits.perception.value = '';
+        if (actorData.data.data.traits.di.value == false) actorData.data.data.traits.di.value = [];
+        if (actorData.data.data.traits.dr.value == false) actorData.data.data.traits.dr.value = [];
+        if (actorData.data.data.traits.dv.value == false) actorData.data.data.traits.dv.value = [];
+        if (actorData.data.data.traits.ci.value == false) actorData.data.data.traits.ci.value = [];
 
-        if (actorData['data.traits.perception.value'] == false) actorData['data.traits.perception.value'] = '';
-        if (actorData['data.traits.languages.value'] == false) actorData['data.traits.languages.value'] = '';
-        if (actorData['data.traits.di.value'] == false) actorData['data.traits.di.value'] = '';
-        if (actorData['data.traits.dr.value'] == false) actorData['data.traits.dr.value'] = '';
-        if (actorData['data.traits.dv.value'] == false) actorData['data.traits.dv.value'] = '';
-        if (actorData['data.traits.ci.value'] == false) actorData['data.traits.ci.value'] = '';
+        // setting languages, some are predefined in CONFIG.languages
+        let languages = this.getAttribute(importData.attribs, 'npc_languages').split(', ');
+        let custom = '';
+        for (let lang of languages) {
+            let index = false;
+            for (let key in CONFIG.languages) {
+                if (CONFIG.languages[key] === lang.trim()) {
+                    index = key;
+                    break;
+                }
+            }
+            if (index !== false) {
+                actorData.data.data.traits.languages.value.push(index);
+            } else {
+                if (custom !== '') custom += ', ';
+                custom += lang.trim();
+            }
+        }
+        if (custom !== '') {
+            actorData.data.data.traits.languages.value.push('custom');
+            actorData.data.data.traits.languages.custom = custom;
+        }
+
 
         // set spellslots
-        actorData['data.spells.spell1.value'] = this.getAttribute(npcData.attribs, 'lvl1_slots_total');
-        actorData['data.spells.spell1.max'] = actorData['data.spells.spell1.value'];
-        actorData['data.spells.spell2.value'] = this.getAttribute(npcData.attribs, 'lvl2_slots_total');
-        actorData['data.spells.spell2.max'] = actorData['data.spells.spell2.value'];
-        actorData['data.spells.spell3.value'] = this.getAttribute(npcData.attribs, 'lvl3_slots_total');
-        actorData['data.spells.spell3.max'] = actorData['data.spells.spell3.value'];
-        actorData['data.spells.spell4.value'] = this.getAttribute(npcData.attribs, 'lvl4_slots_total');
-        actorData['data.spells.spell4.max'] = actorData['data.spells.spell4.value'];
-        actorData['data.spells.spell5.value'] = this.getAttribute(npcData.attribs, 'lvl5_slots_total');
-        actorData['data.spells.spell5.max'] = actorData['data.spells.spell5.value'];
-        actorData['data.spells.spell6.value'] = this.getAttribute(npcData.attribs, 'lvl6_slots_total');
-        actorData['data.spells.spell6.max'] = actorData['data.spells.spell6.value'];
-        actorData['data.spells.spell7.value'] = this.getAttribute(npcData.attribs, 'lvl7_slots_total');
-        actorData['data.spells.spell7.max'] = actorData['data.spells.spell7.value'];
-        actorData['data.spells.spell8.value'] = this.getAttribute(npcData.attribs, 'lvl8_slots_total');
-        actorData['data.spells.spell8.max'] = actorData['data.spells.spell8.value'];
-        actorData['data.spells.spell9.value'] = this.getAttribute(npcData.attribs, 'lvl9_slots_total');
-        actorData['data.spells.spell9.max'] = actorData['data.spells.spell9.value'];
+        actorData.data.data.spells.spell1.value = this.getAttribute(importData.attribs, 'lvl1_slots_total');
+        actorData.data.data.spells.spell1.max = actorData.data.data.spells.spell1.value;
+        actorData.data.data.spells.spell2.value = this.getAttribute(importData.attribs, 'lvl2_slots_total');
+        actorData.data.data.spells.spell2.max = actorData.data.data.spells.spell2.value;
+        actorData.data.data.spells.spell3.value = this.getAttribute(importData.attribs, 'lvl3_slots_total');
+        actorData.data.data.spells.spell3.max = actorData.data.data.spells.spell3.value;
+        actorData.data.data.spells.spell4.value = this.getAttribute(importData.attribs, 'lvl4_slots_total');
+        actorData.data.data.spells.spell4.max = actorData.data.data.spells.spell4.value;
+        actorData.data.data.spells.spell5.value = this.getAttribute(importData.attribs, 'lvl5_slots_total');
+        actorData.data.data.spells.spell5.max = actorData.data.data.spells.spell5.value;
+        actorData.data.data.spells.spell6.value = this.getAttribute(importData.attribs, 'lvl6_slots_total');
+        actorData.data.data.spells.spell6.max = actorData.data.data.spells.spell6.value;
+        actorData.data.data.spells.spell7.value = this.getAttribute(importData.attribs, 'lvl7_slots_total');
+        actorData.data.data.spells.spell7.max = actorData.data.data.spells.spell7.value;
+        actorData.data.data.spells.spell8.value = this.getAttribute(importData.attribs, 'lvl8_slots_total');
+        actorData.data.data.spells.spell8.max = actorData.data.data.spells.spell8.value;
+        actorData.data.data.spells.spell9.value = this.getAttribute(importData.attribs, 'lvl9_slots_total');
+        actorData.data.data.spells.spell9.max = actorData.data.data.spells.spell9.value;
 
         // ressources 
-        let legActions = this.getAttribute(npcData.attribs, 'npc_legendary_actions');
+        let legActions = this.getAttribute(importData.attribs, 'npc_legendary_actions');
         if (legActions == false) {
-            legActions = this.getAttribute(npcData.attribs, 'legendary_flag');
+            legActions = this.getAttribute(importData.attribs, 'legendary_flag');
         }
         if (legActions == false) {
             legActions = 0;
         }
             
-        actorData['data.resources.legact.value'] = legActions;
-        actorData['data.resources.legact.max'] = legActions;
+        actorData.data.data.resources.legact.value = legActions;
+        actorData.data.data.resources.legact.max = legActions;
 
         // create and save items
         let customSpellNames = {};
@@ -746,12 +796,12 @@ class Roll20NpcImporter extends Application {
 
         if (Object.keys(attacks).length > 0) {
             for (let attackId in attacks) {
-                let strMod = Math.floor(actorData['data.abilities.str.value'] / 2 - 5);
+                let strMod = Math.floor(actorData.data.data.abilities.str.value / 2 - 5);
 
                 let name = attacks[attackId][this.translateAttribName('attName')] != undefined ? attacks[attackId][this.translateAttribName('attName')] : attacks[attackId][this.translateAttribName('attNameAlt')];
                 let description = attacks[attackId][this.translateAttribName('attDesc')] == undefined ? attacks[attackId][this.translateAttribName('attDecAlt')] : attacks[attackId][this.translateAttribName('attDesc')];
                 if(description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
-                let bonus = attacks[attackId][this.translateAttribName('attacktohit')] == undefined ? '' : (attacks[attackId][this.translateAttribName('attacktohit')] - actorData['data.attributes.prof.value'] - strMod);
+                let bonus = attacks[attackId][this.translateAttribName('attacktohit')] == undefined ? '' : (attacks[attackId][this.translateAttribName('attacktohit')] - actorData.data.data.attributes.prof.value - strMod);
                 let damage = attacks[attackId].attackdamage == undefined ? '' : attacks[attackId].attackdamage + '-' + strMod;
                 let damageType = attacks[attackId].attackdamagetype == undefined ? '' : attacks[attackId].attackdamagetype.toLowerCase();
                 let damage2 = attacks[attackId].attackdamage2 == undefined ? '' : attacks[attackId].attackdamage2 + '-' + strMod;
@@ -866,9 +916,9 @@ class Roll20NpcImporter extends Application {
                         let match = regex.exec(description);
                         if (match != undefined && match.length >= 2 && match[2] != 0) {
                             let spellSlotCount = match[2];
-                            if (actorData['data.spells.spell' + i + '.value'] != spellSlotCount) {
-                                actorData['data.spells.spell' + i + '.value'] = spellSlotCount;
-                                actorData['data.spells.spell' + i + '.max'] = spellSlotCount;
+                            if (actorData.data.data.spells['spell' + i ].value != spellSlotCount) {
+                                actorData.data.data.spells['spell' + i ].value = spellSlotCount;
+                                actorData.data.data.spells['spell' + i ].max = spellSlotCount;
                             }
                         }                       
                     }
@@ -905,10 +955,10 @@ class Roll20NpcImporter extends Application {
 
         if (this.isOgl == false) {
             // at will spells
-            customSpellNames = this.findAtWillSpells(customSpellNames, this.getAttribute(npcData.attribs, 'innate_spellcasting_blurb'));
+            customSpellNames = this.findAtWillSpells(customSpellNames, this.getAttribute(importData.attribs, 'innate_spellcasting_blurb'));
 
             // x per day spells
-            customSpellNames = this.findPerDaySpells(customSpellNames, this.getAttribute(npcData.attribs, 'innate_spellcasting_blurb'));  
+            customSpellNames = this.findPerDaySpells(customSpellNames, this.getAttribute(importData.attribs, 'innate_spellcasting_blurb'));  
         }
 
         // apply custom spell tags (such as "at will" or "x/day")
@@ -923,40 +973,40 @@ class Roll20NpcImporter extends Application {
 
         // set token
         try {
-            let npcTokenData = JSON.parse(npcData.defaulttoken.replace('\\', ''));
-            actorData['token.displayName'] = parseInt(this.showTokenName); 
-            actorData['token.name'] = actorData['name'];
-            actorData['token.img'] = npcTokenData['imgsrc'];
-            if (actorData['token.img'].indexOf('?') != -1) {
-                actorData['token.img'] = actorData['token.img'].split('?')[0];
+            let npcTokenData = JSON.parse(importData.defaulttoken.replace('\\', ''));
+            actorData.data.token.displayName = parseInt(this.showTokenName); 
+            actorData.data.token.name = actorData.data.name;
+            actorData.data.token.img = tokenImage === '' ? npcTokenData['imgsrc']: tokenImage;
+            if (actorData.data.token.img.indexOf('?') != -1) {
+                actorData.data.token.img = actorData.data.token.img.split('?')[0];
             }
             if (this.useTokenAsAvatar) {
-                actorData['img'] = actorData['token.img'];
+                actorData.data.img = actorData.data.token.img;
             }
-            actorData['token.width'] = this.getTokenSize(actorData['data.traits.size.value']);
-            actorData['token.height'] = actorData['token.width'];
+            actorData.data.token.width = this.getTokenSize(actorData.data.data.traits.size.value);
+            actorData.data.token.height = actorData.data.token.width;
 
             if (npcTokenData['light_hassight'] == true && this.ignoreTokenLight == false) {
-                actorData['token.dimSight'] = parseInt(npcTokenData['light_radius']);
-                actorData['token.brightSight'] = parseInt(npcTokenData['light_dimradius']);
+                actorData.data.token.dimSight = parseInt(npcTokenData['light_radius']);
+                actorData.data.token.brightSight = parseInt(npcTokenData['light_dimradius']);
             }
             if (npcTokenData['light_otherplayers'] == true && this.ignoreTokenLight == false) {
-                actorData['token.dimLight'] = parseInt(npcTokenData['light_radius']);
-                actorData['token.brightLight'] = parseInt(npcTokenData['light_dimradius']);
+                actorData.data.token.dimLight = parseInt(npcTokenData['light_radius']);
+                actorData.data.token.brightLight = parseInt(npcTokenData['light_dimradius']);
             }
 
-            actorData['token.displayBars'] = parseInt(this.showTokenBars);
+            actorData.data.token.displayBars = parseInt(this.showTokenBars);
             if (this.tokenBar1Link == 'attributes.hp') {
-                actorData['token.bar1.value'] = actorData['data.attributes.hp.value'];
-                actorData['token.bar1.max'] = actorData['data.attributes.hp.max'];
+                actorData.data.token.bar1.value = actorData.data.data.attributes.hp.value;
+                actorData.data.token.bar1.max = actorData.data.data.attributes.hp.max;
             } else {
-                actorData['token.bar1.value'] = npcTokenData['bar1_value'];
-                actorData['token.bar1.max'] = npcTokenData['bar1_max'];     
+                actorData.data.token.bar1.value = npcTokenData['bar1_value'];
+                actorData.data.token.bar1.max = npcTokenData['bar1_max'];     
             }    
-            actorData['token.bar2.value'] = npcTokenData['bar2_value'];
-            actorData['token.bar2.max'] = npcTokenData['bar2_max'];
-            actorData['token.bar1.attribute'] = this.tokenBar1Link;
-            actorData['token.bar2.attribute'] = this.tokenBar2Link;   
+            actorData.data.token.bar2.value = npcTokenData['bar2_value'];
+            actorData.data.token.bar2.max = npcTokenData['bar2_max'];
+            actorData.data.token.bar1.attribute = this.tokenBar1Link;
+            actorData.data.token.bar2.attribute = this.tokenBar2Link;   
 
 
         } catch (e) {
@@ -967,9 +1017,11 @@ class Roll20NpcImporter extends Application {
         
 
         // save data to actor
-        await this.createActorItems(actor, actorItems, tempActor);
-        actor.update(actorData);
+        //await this.createActorItems(actor, actorItems, tempActor);
+        //actor.update(actorData);
 
+        this.createActorItems(actorData, actorItems, true);
+        return actorData;
     }
 
     /**
@@ -1011,25 +1063,26 @@ class Roll20NpcImporter extends Application {
                 size: this.getSize(npcString),
                 alignment: this.getAlignment(npcString)
             }
+            let type = npcString;
+            // remove alignment
+            type = type.replace(cleanString.alignment, '').trim();
 
-            cleanString.type = this.fixUpperCase(npcString.replace(cleanString.size, '').replace(cleanString.alignment, '')).trim().replace(',', '');
+            // remove first word which is almost always size (doing it this way to not break stuff like "swarm of medium beasts")
+            let splitType = type.split(' ');
+            type = '';
+            for (let i = 1; i < splitType.length; i++) {
+                type += splitType[i] + ' ';
+            }
+            type = type.trim();
+
+            // remove any ,
+            type = type.replace(',', '').trim();
+
+            cleanString.type = this.fixUpperCase(type);
             return cleanString;
         } else {
-            return { type: '', size: '', alignment: '' };
+            return { type: '', size: 'med', alignment: '' };
         }
-    }
-
-
-    /**
-     * Cleans the type string of npcs, removing alignment and size, not yet fully implemented
-     * @param {String} npcTypeString
-     */
-    getType(npcTypeString) {
-        let cleanString = "";
-        // TODO: remove size
-        // TODO: improve alignment logic
-        cleanString = npcTypeString.split(',')[0];
-        return cleanString;
     }
 
     /**
@@ -1037,22 +1090,31 @@ class Roll20NpcImporter extends Application {
      * @param {String} npcTypeString
      */
     getAlignment(npcTypeString) {
-        let cleanString = "";
+        let cleanString = '';
         npcTypeString = npcTypeString.toLowerCase();
         let alignments = [
+            'any alignment',
+            'any non-good alignment',
+            'any non-evil alignment',
+            'any non-lawful alignment',
+            'any non-chaotic alignment',
+            'any non-neutral alignment',
             'lawful',
             'chaotic',
+            'neutral',
             'good',
             'evil',
-            'neutral',
-            'unaligned',
-            'any alignment'
+            'unaligned'
         ]
-        alignments.forEach(function (item) {
+        for (let item of alignments) {
             if (npcTypeString.includes(item)) {
                 cleanString = (cleanString.length > 0) ? cleanString + ' ' + item : item;
+                if (cleanString.indexOf('any') != -1) {
+                    // we don't need more information if it the alignment contains one of the "any..." entrys
+                    return cleanString;
+                }
             }
-        });
+        }
         return cleanString;
     }
 
@@ -1061,27 +1123,21 @@ class Roll20NpcImporter extends Application {
      * @param {String} npcTypeString
      */
     getSize(npcTypeString) {
-        let returnSize = "medium";
-        //npcTypeString = npcTypeString.toLowerCase();
-        let sizes = [
-            'fine', 
-            'diminutive',
-            'tiny',
-            'small',
-            'medium',
-            'large',
-            'huge',
-            'gargantuan',
-            'colossal'
-        ]
-
-        for(let size of sizes) {
-            if (npcTypeString.indexOf(size) != -1) {
-                returnSize = size;
-                break;
+        let firstWord = npcTypeString.split(' ')[0];
+        // most often the creature size is stored as the first word, so we check that first in order to not get false information for swarms, which have 2 sizes in their string
+        for (let key in CONFIG.actorSizes) {
+            if (firstWord.indexOf(CONFIG.actorSizes[key].toLowerCase()) != -1 || firstWord === CONFIG.actorSizes[key]) {
+                return key;
             }
         }
-        return returnSize;
+        // in case the first word was not a defined size, we search all of the string
+        for (let key in CONFIG.actorSizes) {
+            if (npcTypeString.indexOf(CONFIG.actorSizes[key].toLowerCase()) != -1) {
+                return key;
+            }
+        }
+        // if there still was no size found we take medium as default
+        return 'med';
     }
 
     /**
@@ -1131,10 +1187,9 @@ class Roll20NpcImporter extends Application {
      */
     getTokenSize(creatureSize) {
         switch (creatureSize.toLowerCase()) {
-            case 'large': return 2; break;
+            case 'lg': return 2; break;
             case 'huge': return 3; break;
-            case 'gargantuan': return 4; break;
-            case 'colossal': return 5; break;
+            case 'grg': return 4; break;
             default: return 1; break;
         }
     }
@@ -1254,17 +1309,12 @@ class Roll20NpcImporter extends Application {
      * @param {boolean} getShapedOverride - forces the function to return the shaped variant from the dictionary
      */
     translateAttribName(name) {
-        //console.log('DEBUG name:' + name);
-        //console.log('array: ' + STAT_DICTIONARY[name]);
-        //console.log('isOgl: ' + this.isOgl);
         if (this.isOgl) {
             if (STAT_DICTIONARY[name] != undefined && STAT_DICTIONARY[name].length == 2) {
-                //console.log('translated: ' + STAT_DICTIONARY[name][0]);
                 return STAT_DICTIONARY[name][0];
             }
         } else {
             if (STAT_DICTIONARY[name] != undefined && STAT_DICTIONARY[name].length == 2) {
-                //console.log('translated: ' + STAT_DICTIONARY[name][1]);
                 return STAT_DICTIONARY[name][1];
             }
         }

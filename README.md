@@ -2,7 +2,11 @@
 A module for FoundryVTT, used to import DND5e NPC sheets from the popular Roll20 application.
 Only works for 5e NPC characters that use the OGL or Shaped sheet version.
 
-Download and put the roll20npcimporter folder into FoundryVTT/public/modules and restart Foundry if it was running.
+Installation:
+1. Download the [betternpcsheet5e.zip](https://github.com/syl3r86/BetterNPCSheet5e/raw/master/betternpcsheet5e.zip)
+2. Unzip it into FoundryVTT/public/modules
+3. Restart Foundry if it was running.
+
 You'll see this button in the actors list after correctly installing the module.
 
 ![npc import button](https://i.imgur.com/EN6a9Ho.png)
@@ -25,6 +29,12 @@ Advanced Options:
    - A fallback HP value. If A regular HP cant be found the importer first trys to roll the HP Formula, if that also fails, this Default HP will be used
 - Default Source
   - Sets a Value forthe Source of the Actor
+- Use TokenImage as Avatar
+   - this option will overwrite the default Avatar picture with the picture used for the token
+- Use Images from public folder
+   - If you want to use token or avatar images that you already have somewhere in your public folder, you can use them instead of the images that are defined in the imported data.
+   - Avatar and Token Image Path
+      - This is where you define where the images are stored that you want to use. You can use @name to use the actors name as part of the Path or Filename.
 - Display Options for Token Nameplate and Bars
    - Ignore Token Lighting
       - lets you ignore light data from the roll20 token if you prefere your tokens to be blind

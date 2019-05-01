@@ -32,9 +32,24 @@
             <label>Default Source</label>
             <input type="text" name="defaultSource" placeholder="10" value="{{defaultSource}}" data-dtype="Number" />
         </div>
+        <hr>
+        <h3 class="form-header">Image Options</h3>
+        <p class="notes">Options on how to handle Image urls</p>
         <div class="form-group">
             <label>Use TokenImage as Avatar</label>
             <input type="checkbox" name="useTokenAsAvatar" value="{{useTokenAsAvatar}}" />
+        </div>
+        <div class="form-group">
+            <label>Use Images from public folder</label>
+            <input type="checkbox" name="useFolderPictures" value="{{useFolderPictures}}" />
+        </div>
+        <div class="form-group" style="display:none;">
+            <label title="@name will be replaced by the actors name">Avatar Image Path</label>
+            <input type="text" name="avatarImgPath" placeholder="images/avatar/@name.jpg" value="{{avatarImgPath}}" data-dtype="Number" title="@name will be replaced by the actors name"/>
+        </div>
+        <div class="form-group" style="display:none;">
+            <label title="@name will be replaced by the actors name">Token Image Path</label>
+            <input type="text" name="tokenImgPath" placeholder="images/token/@name.png" value="{{tokenImgPath}}" data-dtype="Number" title="@name will be replaced by the actors name"/>
         </div>
         <hr>
         <h3 class="form-header">Default Token Config</h3>
