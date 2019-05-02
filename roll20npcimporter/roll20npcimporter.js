@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.4.3
+ * @version 0.4.4
  */
 
 class Roll20NpcImporter extends Application {
@@ -207,6 +207,7 @@ class Roll20NpcImporter extends Application {
         } catch (e) {
             console.error("Invalid JSON, unable to parse");
             console.error(e.message);
+            ui.notifications.error("Importing failed and had to be aborted.");
             return;
         }
 
@@ -226,7 +227,15 @@ class Roll20NpcImporter extends Application {
 
         // create actor if required
         // TODO: change this part for compendium storage
-        let tmpActor = await this.parseNpcData(npcData);
+        let tmpActor
+        try {
+            tmpActor = await this.parseNpcData(npcData);
+        } catch (e) {
+            console.log('NPCImporter | Import failed and aborted');
+            console.log(e);
+
+        }
+        
         if (targetMode == 'compendium') {
             if (compendiumName != '') {
                 let compendium = game.packs.find(p => p.collection === compendiumName);
@@ -241,9 +250,7 @@ class Roll20NpcImporter extends Application {
             }
         } else {
             console.log("NPCImporter | creating npc named " + tmpActor.name);
-            Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false }).then(async actor => {
-                this.createActorItems(actor, tmpActor.data.items);
-            });
+            Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false });
         }
     }
 
@@ -591,42 +598,60 @@ class Roll20NpcImporter extends Application {
         actorData.data.data.traits.senses.value = this.getAttribute(importData.attribs, 'npc_senses');
 
         let passivePerception = 10 + Math.floor((actorData.data.data.abilities.wis.value - 10) / 2);
-        if (actorData.data.data.skills.prc.value != undefined) {
-            passivePerception = passivePerception + (actorData.data.data.attributes.prof.value * actorData.data.data.skills.prc.value);
-        }
-        actorData.data.data.traits.perception.value = passivePerception;
-        actorData.data.data.traits.di.value = this.getAttribute(importData.attribs, 'npc_immunities').toLowerCase().split(', ');
-        actorData.data.data.traits.dr.value = this.getAttribute(importData.attribs, 'npc_resistances').toLowerCase().split(', ');
-        actorData.data.data.traits.dv.value = this.getAttribute(importData.attribs, 'npc_vulnerabilities').toLowerCase().split(', ');
-        actorData.data.data.traits.ci.value = this.getAttribute(importData.attribs, 'npc_condition_immunities').toLowerCase().split(', ');
-        if (actorData.data.data.traits.perception.value == false) actorData.data.data.traits.perception.value = '';
-        if (actorData.data.data.traits.di.value == false) actorData.data.data.traits.di.value = [];
-        if (actorData.data.data.traits.dr.value == false) actorData.data.data.traits.dr.value = [];
-        if (actorData.data.data.traits.dv.value == false) actorData.data.data.traits.dv.value = [];
-        if (actorData.data.data.traits.ci.value == false) actorData.data.data.traits.ci.value = [];
+        passivePerception = passivePerception + (actorData.data.data.attributes.prof.value * actorData.data.data.skills.prc.value);
+        
+        
+
+        if (actorData.data.data.traits.perception.value == false)
+            actorData.data.data.traits.perception.value = '';
+        else
+            actorData.data.data.traits.perception.value = passivePerception;
+
+        if (actorData.data.data.traits.di.value == false)
+            actorData.data.data.traits.di.value = [];
+        else
+            actorData.data.data.traits.di.value = this.getAttribute(importData.attribs, 'npc_immunities').toLowerCase().split(', ');
+
+        if (actorData.data.data.traits.dr.value == false)
+            actorData.data.data.traits.dr.value = [];
+        else
+            actorData.data.data.traits.dr.value = this.getAttribute(importData.attribs, 'npc_resistances').toLowerCase().split(', ');
+
+        if (actorData.data.data.traits.dv.value == false)
+            actorData.data.data.traits.dv.value = [];
+        else
+            actorData.data.data.traits.dv.value = this.getAttribute(importData.attribs, 'npc_vulnerabilities').toLowerCase().split(', ');
+
+        if (actorData.data.data.traits.ci.value == false)
+            actorData.data.data.traits.ci.value = [];
+        else
+            actorData.data.data.traits.ci.value = this.getAttribute(importData.attribs, 'npc_condition_immunities').toLowerCase().split(', ');
+
 
         // setting languages, some are predefined in CONFIG.languages
-        let languages = this.getAttribute(importData.attribs, 'npc_languages').split(', ');
-        let custom = '';
-        for (let lang of languages) {
-            let index = false;
-            for (let key in CONFIG.languages) {
-                if (CONFIG.languages[key] === lang.trim()) {
-                    index = key;
-                    break;
+        if (this.getAttribute(importData.attribs, 'npc_languages') != false) {
+            let languages = this.getAttribute(importData.attribs, 'npc_languages').split(', ');
+            let custom = '';
+            for (let lang of languages) {
+                let index = false;
+                for (let key in CONFIG.languages) {
+                    if (CONFIG.languages[key] === lang.trim()) {
+                        index = key;
+                        break;
+                    }
+                }
+                if (index !== false) {
+                    actorData.data.data.traits.languages.value.push(index);
+                } else {
+                    if (custom !== '') custom += ', ';
+                    custom += lang.trim();
                 }
             }
-            if (index !== false) {
-                actorData.data.data.traits.languages.value.push(index);
-            } else {
-                if (custom !== '') custom += ', ';
-                custom += lang.trim();
+            if (custom !== '') {
+                actorData.data.data.traits.languages.value.push('custom');
+                actorData.data.data.traits.languages.custom = custom;
             }
-        }
-        if (custom !== '') {
-            actorData.data.data.traits.languages.value.push('custom');
-            actorData.data.data.traits.languages.custom = custom;
-        }
+        }       
 
 
         // set spellslots
@@ -1071,6 +1096,7 @@ class Roll20NpcImporter extends Application {
 
             // remove any ,
             type = type.replace(',', '').trim();
+            type = type.replace(',', '').trim();
 
             cleanString.type = this.fixUpperCase(type);
             return cleanString;
@@ -1093,6 +1119,11 @@ class Roll20NpcImporter extends Application {
             'any non-lawful alignment',
             'any non-chaotic alignment',
             'any non-neutral alignment',
+            'any non good alignment',
+            'any non evil alignment',
+            'any non lawful alignment',
+            'any non chaotic alignment',
+            'any non neutral alignment',
             'lawful',
             'chaotic',
             'neutral',
