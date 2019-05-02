@@ -3,7 +3,7 @@ A module for FoundryVTT, used to import DND5e NPC sheets from the popular Roll20
 Only works for 5e NPC characters that use the OGL or Shaped sheet version.
 
 Installation:
-1. Download the [betternpcsheet5e.zip](https://github.com/syl3r86/BetterNPCSheet5e/raw/master/betternpcsheet5e.zip)
+1. Download the [roll20npcimporter.zip](https://github.com/syl3r86/roll20npcimporter/raw/master/roll20npcimporter.zip)
 2. Unzip it into FoundryVTT/public/modules
 3. Restart Foundry if it was running.
 
