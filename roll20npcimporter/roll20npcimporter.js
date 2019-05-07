@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.4.4
+ * @version 0.5
  */
 
 class Roll20NpcImporter extends Application {
@@ -12,10 +12,10 @@ class Roll20NpcImporter extends Application {
         // setting some default options here, change to your liking. Options will be available in the app too
 
         this.reactionsAsAttacks = false; // if false, reactions will be added to feats, true means weapons/attacks
-        this.reactionPrefix = 'RE - '; // prefix used for reactions
+        this.reactionPrefix = ''; // prefix used for reactions
 
         this.legendaryAsAttacks = false;  // if false, legendary actions will be added to feats, true means weapons/attacks
-        this.legendaryPrefix = 'LA - '; // prefix used for legendary Actions
+        this.legendaryPrefix = ''; // prefix used for legendary Actions
 
         this.lairAsAttacks = false;
         this.lairPrefix = 'Lair Action';
@@ -226,16 +226,16 @@ class Roll20NpcImporter extends Application {
         }
 
         // create actor if required
-        // TODO: change this part for compendium storage
         let tmpActor
         try {
             tmpActor = await this.parseNpcData(npcData);
         } catch (e) {
             console.log('NPCImporter | Import failed and aborted');
             console.log(e);
+            ui.notifications.error("Import failed and aborted");
 
         }
-        
+        console.log(tmpActor);
         if (targetMode == 'compendium') {
             if (compendiumName != '') {
                 let compendium = game.packs.find(p => p.collection === compendiumName);
@@ -258,7 +258,7 @@ class Roll20NpcImporter extends Application {
         console.log("NPCImporter | Parsing data");
 
         // create temp actor to store everything as it gets created
-        let name = this.getAttribute(importData.attribs, 'npc_name');
+        let name = importData.name;
         let image = '';
         let tokenImage = '';
         if (this.useFolderPictures) {
@@ -359,6 +359,7 @@ class Roll20NpcImporter extends Application {
 
         for (let legendaryId in legendarys) {
             legendarys[legendaryId].name = this.legendaryPrefix + legendarys[legendaryId].name;
+            legendarys[legendaryId].isLegendary = true;
             if (this.legendaryAsAttacks) {
                 attacks[legendaryId] = legendarys[legendaryId];
             } else {
@@ -368,6 +369,7 @@ class Roll20NpcImporter extends Application {
 
         for (let reactionId in reactions) {
             reactions[reactionId].name = this.reactionPrefix + reactions[reactionId].name;
+            reactions[reactionId].isReaction = true;
             if (this.reactionsAsAttacks) {
                 attacks[reactionId] = reactions[reactionId];
             } else {
@@ -381,6 +383,7 @@ class Roll20NpcImporter extends Application {
             } else {
                 lair[lairId][this.translateAttribName('name')] = this.lairPrefix + ' - ' + lair[lairId][this.translateAttribName('name')];
             }
+            lair(lairId).isLair = true;
             if (this.lairAsAttacks) {
                 attacks[lairId] = lair[lairId];
             } else {
@@ -595,62 +598,31 @@ class Roll20NpcImporter extends Application {
 
 
         // set traits
-        actorData.data.data.traits.senses.value = this.getAttribute(importData.attribs, 'npc_senses');
+        actorData.data.data.traits.senses.value = this.getAttribute(importData.attribs, 'npc_senses').replace(/(, passive Perception \d*)/g, '');
 
         let passivePerception = 10 + Math.floor((actorData.data.data.abilities.wis.value - 10) / 2);
         passivePerception = passivePerception + (actorData.data.data.attributes.prof.value * actorData.data.data.skills.prc.value);
-        
-        
+        actorData.data.data.traits.perception.value = passivePerception;
 
-        if (actorData.data.data.traits.perception.value == false)
-            actorData.data.data.traits.perception.value = '';
-        else
-            actorData.data.data.traits.perception.value = passivePerception;
-
-        if (actorData.data.data.traits.di.value == false)
-            actorData.data.data.traits.di.value = [];
-        else
-            actorData.data.data.traits.di.value = this.getAttribute(importData.attribs, 'npc_immunities').toLowerCase().split(', ');
-
-        if (actorData.data.data.traits.dr.value == false)
-            actorData.data.data.traits.dr.value = [];
-        else
-            actorData.data.data.traits.dr.value = this.getAttribute(importData.attribs, 'npc_resistances').toLowerCase().split(', ');
-
-        if (actorData.data.data.traits.dv.value == false)
-            actorData.data.data.traits.dv.value = [];
-        else
-            actorData.data.data.traits.dv.value = this.getAttribute(importData.attribs, 'npc_vulnerabilities').toLowerCase().split(', ');
-
-        if (actorData.data.data.traits.ci.value == false)
-            actorData.data.data.traits.ci.value = [];
-        else
-            actorData.data.data.traits.ci.value = this.getAttribute(importData.attribs, 'npc_condition_immunities').toLowerCase().split(', ');
-
-
-        // setting languages, some are predefined in CONFIG.languages
+        if (this.getAttribute(importData.attribs, 'npc_immunities') != false) {
+            let npc_immunities = this.getAttribute(importData.attribs, 'npc_immunities')
+            actorData.data.data.traits.di = this.splitStringByProperties(npc_immunities, CONFIG.damageTypes, actorData.data.data.traits.di);
+        }
+        if (this.getAttribute(importData.attribs, 'npc_resistances') != false) {
+            let npc_resistances = this.getAttribute(importData.attribs, 'npc_resistances')
+            actorData.data.data.traits.dr = this.splitStringByProperties(npc_resistances, CONFIG.damageTypes, actorData.data.data.traits.dr);
+        }
+        if (this.getAttribute(importData.attribs, 'npc_vulnerabilities') != false) {
+            let npc_vulnerabilities = this.getAttribute(importData.attribs, 'npc_vulnerabilities')
+            actorData.data.data.traits.dv = this.splitStringByProperties(npc_vulnerabilities, CONFIG.damageTypes, actorData.data.data.traits.dv);
+        }
+        if (this.getAttribute(importData.attribs, 'npc_condition_immunities') != false) {
+            let npc_condition_immunities = this.getAttribute(importData.attribs, 'npc_condition_immunities')
+            actorData.data.data.traits.ci = this.splitStringByProperties(npc_condition_immunities, CONFIG.conditionTypes, actorData.data.data.traits.ci);
+        }    
         if (this.getAttribute(importData.attribs, 'npc_languages') != false) {
-            let languages = this.getAttribute(importData.attribs, 'npc_languages').split(', ');
-            let custom = '';
-            for (let lang of languages) {
-                let index = false;
-                for (let key in CONFIG.languages) {
-                    if (CONFIG.languages[key] === lang.trim()) {
-                        index = key;
-                        break;
-                    }
-                }
-                if (index !== false) {
-                    actorData.data.data.traits.languages.value.push(index);
-                } else {
-                    if (custom !== '') custom += ', ';
-                    custom += lang.trim();
-                }
-            }
-            if (custom !== '') {
-                actorData.data.data.traits.languages.value.push('custom');
-                actorData.data.data.traits.languages.custom = custom;
-            }
+            let languages = this.getAttribute(importData.attribs, 'npc_languages');
+            actorData.data.data.traits.languages = this.splitStringByProperties(languages, CONFIG.languages, actorData.data.data.traits.languages);
         }       
 
 
@@ -874,6 +846,23 @@ class Roll20NpcImporter extends Application {
                         ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
                 };
+                attackObject.flags = {
+                    adnd5e: {
+                        itemInfo: {
+                            type: "action"
+                        }
+                    }
+                }
+                if (attacks[attackId].isLegendary) {
+                    attackObject.flags.adnd5e.itemInfo.type = "legendary";
+                }
+                if (attacks[attackId].isReaction) {
+                    attackObject.flags.adnd5e.itemInfo.type = "reaction";
+                }
+                if (attacks[attackId].isLair) {
+                    attackObject.flags.adnd5e.itemInfo.type = "lair";
+                }
+
                 actorItems.push(attackObject);
             }
         }
@@ -973,7 +962,22 @@ class Roll20NpcImporter extends Application {
                         ability: { type: "String", label: "Offensive Ability", value: ability }
                     }
                 }
-
+                featObject.flags = {
+                    adnd5e: {
+                        itemInfo: {
+                            type: "trait"
+                        }
+                    }
+                }
+                if (feats[featId].isLegendary) {
+                    featObject.flags.adnd5e.itemInfo.type = "legendary";
+                }
+                if (feats[featId].isReaction) {
+                    featObject.flags.adnd5e.itemInfo.type = "reaction";
+                }
+                if (feats[featId].isLair) {
+                    featObject.flags.adnd5e.itemInfo.type = "lair";
+                }
                 actorItems.push(featObject);
             }
         }
@@ -1003,7 +1007,7 @@ class Roll20NpcImporter extends Application {
             actorData.data.token.name = actorData.data.name;
             actorData.data.token.img = tokenImage === '' ? npcTokenData['imgsrc']: tokenImage;
             if (actorData.data.token.img.indexOf('?') != -1) {
-                actorData.data.token.img = actorData.data.token.img.split('?')[0];
+                //actorData.data.token.img = actorData.data.token.img.split('?')[0];
             }
             if (this.useTokenAsAvatar) {
                 actorData.data.img = actorData.data.token.img;
@@ -1383,6 +1387,34 @@ class Roll20NpcImporter extends Application {
 
         }
         return customSpells;
+    }
+
+    splitStringByProperties(string, propertyArray, targetArray) {
+        string = string.replace(';', ',').toLowerCase().split(', ');
+        let custom = '';
+        targetArray.value = [];
+        
+        for (let substring of string) {
+            let index = false;
+            substring = substring.trim()
+            for (let key in propertyArray) {
+                if (propertyArray[key].toLowerCase() === substring) {
+                    index = key;
+                    break;
+                }
+            }
+            if (index !== false) {
+                targetArray.value.push(index);
+            } else {
+                if (custom !== '') custom += ', ';
+                custom += substring.trim();
+            }
+        }
+        if (custom !== '') {
+            targetArray.value.push('custom');
+            targetArray.custom = custom;
+        }
+        return targetArray;
     }
 }
 
