@@ -1,6 +1,6 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.5
+ * @version 0.5.1
  */
 
 class Roll20NpcImporter extends Application {
@@ -233,9 +233,8 @@ class Roll20NpcImporter extends Application {
             console.log('NPCImporter | Import failed and aborted');
             console.log(e);
             ui.notifications.error("Import failed and aborted");
-
+            return;
         }
-        console.log(tmpActor);
         if (targetMode == 'compendium') {
             if (compendiumName != '') {
                 let compendium = game.packs.find(p => p.collection === compendiumName);
@@ -249,7 +248,7 @@ class Roll20NpcImporter extends Application {
                 console.log('NPCImporter | No compendium name was given');
             }
         } else {
-            console.log("NPCImporter | creating npc named " + tmpActor.name);
+            //console.log("NPCImporter | creating npc named " + tmpActor.name);
             Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false });
         }
     }
@@ -663,7 +662,7 @@ class Roll20NpcImporter extends Application {
 
         if (Object.keys(spells).length > 0) {
             for (let spellId in spells) {
-                if (this.isOgl && (spells[spellId][this.translateAttribName('spellName')] == 'CANTRIPS' || spells[spellId][this.translateAttribName('spellName')].indexOf('LEVEL') != -1))
+                if (this.isOgl && (spells[spellId][this.translateAttribName('spellName')] == 'CANTRIPS' || spells[spellId][this.translateAttribName('spellName')] == undefined || spells[spellId][this.translateAttribName('spellName')].indexOf('LEVEL') != -1))
                     continue;
                 let spellName = spells[spellId][this.translateAttribName('spellName')];
                 if (spellName == undefined) {
@@ -1023,6 +1022,10 @@ class Roll20NpcImporter extends Application {
                 actorData.data.token.dimLight = parseInt(npcTokenData['light_radius']);
                 actorData.data.token.brightLight = parseInt(npcTokenData['light_dimradius']);
             }
+            if (isNaN(actorData.data.token.dimSight)) actorData.data.token.dimSight = 0;
+            if (isNaN(actorData.data.token.brightSight)) actorData.data.token.brightSight = 0;
+            if (isNaN(actorData.data.token.dimLight)) actorData.data.token.dimLight = 0;
+            if (isNaN(actorData.data.token.brightLight)) actorData.data.token.brightLight = 0;
 
             actorData.data.token.displayBars = parseInt(this.showTokenBars);
             if (this.tokenBar1Link == 'attributes.hp') {
