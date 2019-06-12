@@ -424,7 +424,7 @@ class Roll20NpcImporter extends Application {
 
         let bio = importData.bio;
         if (importData.gmnotes != '') {
-            bio = bio + '\n<p><strong>GM Notes:</strong></p>\n<p>' + importData.gmnotes + '</p>';
+            bio = bio + '\n<section class="secret" ><p><strong>GM Notes:</strong></p>\n<p>' + importData.gmnotes + '</p></section>';
         }
         bio = unescape(bio);
         bio = bio.replace(/(<a)[^>]*(>)/g, '');
