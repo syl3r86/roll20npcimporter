@@ -296,7 +296,6 @@ class Roll20NpcImporter extends Application {
 
         let original = characterList.find(actor => actor.name == characterName);
         if (original !== undefined) {
-            console.log('husten, we have a problem');
             result.conflict = true;
             if (this.applyToAll === false) {
                 let dialogResult = await new Promise(function (resolve, reject) {
