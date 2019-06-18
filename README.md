@@ -4,7 +4,7 @@ Only works for 5e NPC characters that use the OGL or Shaped sheet version.
 
 ## Installation
 1. Download the [roll20npcimporter.zip](https://github.com/syl3r86/roll20npcimporter/raw/master/roll20npcimporter.zip)
-2. Unzip it into FoundryVTT/public/modules
+2. Unzip it into FoundryVTT/resources/app/public/modules
 3. Restart Foundry if it was running.
 
 You'll see this button in the actors list after correctly installing the module.
