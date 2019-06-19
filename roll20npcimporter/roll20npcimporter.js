@@ -389,9 +389,6 @@ class Roll20NpcImporter extends Application {
                 let cleanName = name.replace(/[^a-zA-Z0-9\s\-\(\)]/g, '');
                 image = this.avatarImgPath.replace('@name', escape(cleanName));
                 tokenImage = this.tokenImgPath.replace('@name', escape(cleanName));
-                if (name.toLowerCase().indexOf('dragon') !== -1) {
-                    cleanName = cleanName.replace('Young', '').replace('Adult', '').replace('Ancient', '').replace('Wyrmling', '').trim()
-                }
                 image = this.avatarImgPath.replace('@name', escape(cleanName));
             }
 
@@ -420,14 +417,22 @@ class Roll20NpcImporter extends Application {
             // make sure that what we want to use actually exists/works and fall back to use the tokenImage instead
             imgLoaded = await this.checkImageUrl(image);
             if (imgLoaded === false) {
-                let newName = image.replace('%20', '-');
-                let newName = image.replace('%20', '-');
+                let newName = image;
+                if (newName.toLowerCase().indexOf('dragon') !== -1) {
+                    newName = newName.replace('Young%20', '').replace('Adult%20', '').replace('Ancient%20', '').replace('%20Wyrmling', '').trim()
+                }
                 imgLoaded = await this.checkImageUrl(newName);
                 if (imgLoaded === true) {
                     image = newName;
+                } else {
+                    newName = image.replace('%20', '-');
+                    imgLoaded = await this.checkImageUrl(newName);
+                    if (imgLoaded === true) {
+                        image = newName;
+                    }
                 }
             }
-            
+
             if (this.useTokenAsAvatar || imgLoaded === false) {
                 image = tokenImage;
             }
