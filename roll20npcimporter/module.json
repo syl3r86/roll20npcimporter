@@ -2,7 +2,7 @@
 	"name": "roll20npcimporter",
 	"title": "Roll20 NPC Importer",
 	"description": "This module will allow a player to import NPC sheets from Roll20.",
-	"version": "0.5.2",
+	"version": "0.5.3",
 	"author": "Felix aka syl3r86",
 	"systems": ["dnd5e"],
 	"scripts": ["./roll20npcimporter.js"],

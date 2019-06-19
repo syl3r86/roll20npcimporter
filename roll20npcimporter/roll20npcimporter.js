@@ -149,6 +149,7 @@ class Roll20NpcImporter extends Application {
 
             ui.notifications.info("Started Importing");
             this.applyToAll = false; // setting this helper variable for all new imports so that the choice isn't persistent between import uses
+            this.ignoreImg = false;
             for (let npc of npcs) {
                 await this.importNpc(npc, targetMode, targetCompendium);
             }
@@ -231,7 +232,6 @@ class Roll20NpcImporter extends Application {
         // check if there are character conflicts and how to handle them
         let newCharacterName = npcData.name;
         let conflictResult = await this.resolveCharacterConflict(actorList, newCharacterName);
-        console.log(conflictResult);
         if (conflictResult.conflict && conflictResult.choice === 'cancle') {
             console.log(`NPCImporter | ${npcData.name} was skipped`);
             return;
@@ -260,7 +260,7 @@ class Roll20NpcImporter extends Application {
         // create actor if required
         let tmpActor
         try {
-            tmpActor = await this.parseNpcData(npcData);
+            tmpActor = await this.parseNpcData(npcData, { ignoreImg: conflictResult.ignoreImg });
         } catch (e) {
             console.log('NPCImporter | Import failed and aborted');
             console.log(e);
@@ -273,7 +273,16 @@ class Roll20NpcImporter extends Application {
             } else {
                 if (conflictResult.conflict && conflictResult.choice === 'update') {
                     console.log(`NPCImporter | ${npcData.name} will be updated`);
-                    
+
+                    // first make sure to use the original art if the user chose so
+                    if (conflictResult.ignoreImg === true) {
+                        let originalActor = await actorCompendium.get(conflictResult.originalId);
+                        tmpActor.data.img = originalActor.data.img;
+                        tmpActor.data.token.img = originalActor.data.token.img;
+                    }
+
+                    // actors in compendie can't be updated, so we remove it to make it look like it has been updated
+                    // not updating a copy of the original actor is just to save ressources, they'd be virtually identical anyway
                     actorCompendium.removeEntity(conflictResult.originalId);
                 }
                 actorCompendium.importEntity(tmpActor);
@@ -282,8 +291,14 @@ class Roll20NpcImporter extends Application {
             if (conflictResult.conflict && conflictResult.choice === 'update') {
                 let originalActor = game.actors.get(conflictResult.originalId)
                 console.log("NPCImporter | updating " + tmpActor.name);
-                originalActor.update(tmpActor.data);
 
+                // first make sure to not update art if the user chose so
+                if (conflictResult.ignoreImg === true) {
+                    tmpActor.data.img = undefined;
+                    tmpActor.data.token.img = undefined;
+                }
+                
+                originalActor.update(tmpActor.data);
             } else {
                 console.log("NPCImporter | creating npc named " + tmpActor.name);
                 Actor5e.create(tmpActor.data, { temporary: false, displaySheet: false });
@@ -300,9 +315,12 @@ class Roll20NpcImporter extends Application {
             if (this.applyToAll === false) {
                 let dialogResult = await new Promise(function (resolve, reject) {
                     //new Dialog(...close: (html) => { resolve(html) }).render(true);
+                    let content = '';
+                    content += '<input type="checkbox" id="applyToAll"><label for="applyToAll"> Apply to all conflicts</label><br>';
+                    content += `<input type="checkbox" id="ignoreImg"><label for="ignoreImg"> Don't update Avatar or Token Images</label>`;
                     let d = new Dialog({
                         title: 'An Actor with that name already exists',
-                        content: '<input type="checkbox" id="applyToAll"><label for="applyToAll"> Apply to all conflicts</label>',
+                        content: content,
                         buttons: {
                             one: {
                                 icon: '<i class="fas fa-check"></i>',
@@ -330,45 +348,84 @@ class Roll20NpcImporter extends Application {
                     });
                     d.render(true);
                 });
-                if (dialogResult.html.find('input')[0].checked) {
+                let ignoreImg = dialogResult.html.find('#ignoreImg')[0].checked
+                let applyToAll = dialogResult.html.find('#applyToAll')[0].checked
+
+                if (applyToAll) {
                     this.applyToAll = dialogResult.result;
+                    this.ignoreImg = ignoreImg;
                 }
                 result.choice = dialogResult.result;
+                result.ignoreImg = ignoreImg;
             } else {
                 result.choice = this.applyToAll;
+                result.ignoreImg = this.ignoreImg;
             }
             result.originalId = original.id ? original.id : original._id;            
         }
         return result
     }
 
-    async parseNpcData(importData) {
+    async parseNpcData(importData, options = {}) {
         console.log("NPCImporter | Parsing data");
 
         // create temp actor to store everything as it gets created
         let name = importData.name;
+        let npcCreationObject = {
+            name: name,
+            type:'npc'
+        };
+
         let image = '';
         let tokenImage = '';
-        if (this.useFolderPictures) {
-            image = this.avatarImgPath.replace('@name', escape(name));
-            tokenImage = this.tokenImgPath.replace('@name', escape(name));
-        } else {
-            image = importData.avatar
-            try {
-                let npcTokenData = JSON.parse(importData.defaulttoken.replace('\\', ''));
-                tokenImage = npcTokenData.imgsrc;
-            } catch (e) {
-                console.log("NPCImporter | Could not parse Token Data");
+
+        // only load image and tokenImage if we actually care about them
+        if (options.ignoreImg !== true) {
+            // use folder images if the options is chosen
+            if (this.useFolderPictures) {
+                image = this.avatarImgPath.replace('@name', escape(name));
+                tokenImage = this.tokenImgPath.replace('@name', escape(name));
             }
+
+            // imagepath was not set properly (maybe on purpose) so we use the default option of using the datas image
+            if (image === '') {
+                image = importData.avatar
+            }
+
+            // imagepath was not set properly (maybe on purpose) so we use the default option of using the datas tokenImage
+            if (tokenImage === '') {
+                try {
+                    let npcTokenData = JSON.parse(importData.defaulttoken.replace('\\', ''));
+                    tokenImage = npcTokenData.imgsrc;
+                } catch (e) {
+                    console.log("NPCImporter | Could not parse Token Data");
+                }
+            }
+
+            // make sure that what we want to use actually exists/works and fall back to mystery-man if unsuccessful
+            let imgLoaded = await this.checkImageUrl(tokenImage);
+            if (imgLoaded === false) {
+                console.log('failed to load token art');
+                tokenImage = 'icons/svg/mystery-man.svg';
+            }
+
+            // make sure that what we want to use actually exists/works and fall back to use the tokenImage instead
+            imgLoaded = await this.checkImageUrl(image);
+            if (this.useTokenAsAvatar || imgLoaded === false) {
+                image = tokenImage;
+            }
+
+            // overwrite avatar with token image if the user commands it so
+            if (this.useTokenAsAvatar && tokenImage !== '') {
+                image = tokenImage;
+            }
+
+            // adding the image path to the object used to create the temporary actor
+            npcCreationObject.img = image;
         }
+
+        let actorData = await Actor5e.create(npcCreationObject, { temporary: true, displaySheet: false });
         
-
-        if (this.useTokenAsAvatar && tokenImage !== '') {
-            image = tokenImage;
-        }
-        let actorData = await Actor5e.create({ name: name, img: image, type: 'npc' }, { temporary: true, displaySheet: false });
-
-
         // prepare repeating items
         let actorItems = [];
         // - collect all data of type 'repeated'
@@ -779,7 +836,8 @@ class Roll20NpcImporter extends Application {
                 let components = '';
                 let concentration = spells[spellId][this.translateAttribName('spellconcentration')] != null ? true : false;
                 let description = spells[spellId][this.translateAttribName('spelldescription')] != undefined ? spells[spellId][this.translateAttribName('spelldescription')] : spells[spellId][this.translateAttribName('spellcontent')];
-                if (description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>')+'</p>';
+                if (description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
+                if (description == undefined) description = '';
                 if (spells[spellId][this.translateAttribName('spellathigherlevels')] != undefined) description = description + '\n Cast at higher level:' + spells[spellId][this.translateAttribName('spellathigherlevels')];
                 let duration = spells[spellId][this.translateAttribName('spellduration')] == undefined ? '' : spells[spellId][this.translateAttribName('spellduration')];
                 let level = spells[spellId][this.translateAttribName('spelllevel')] == 'cantrip' ? 0 : spells[spellId][this.translateAttribName('spelllevel')];
@@ -891,6 +949,7 @@ class Roll20NpcImporter extends Application {
                 let name = attacks[attackId][this.translateAttribName('attName')] != undefined ? attacks[attackId][this.translateAttribName('attName')] : attacks[attackId][this.translateAttribName('attNameAlt')];
                 let description = attacks[attackId][this.translateAttribName('attDesc')] == undefined ? attacks[attackId][this.translateAttribName('attDecAlt')] : attacks[attackId][this.translateAttribName('attDesc')];
                 if(description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
+                if (description == undefined) description = '';
                 let bonus = attacks[attackId][this.translateAttribName('attacktohit')] == undefined ? '' : (attacks[attackId][this.translateAttribName('attacktohit')] - actorData.data.data.attributes.prof.value - strMod);
                 let damage = attacks[attackId].attackdamage == undefined ? '' : attacks[attackId].attackdamage + '-' + strMod;
                 let damageType = attacks[attackId].attackdamagetype == undefined ? '' : attacks[attackId].attackdamagetype.toLowerCase();
@@ -964,6 +1023,7 @@ class Roll20NpcImporter extends Application {
                 let name = feats[featId][this.translateAttribName('attName')] != undefined ? feats[featId][this.translateAttribName('attName')] : feats[featId][this.translateAttribName('attNameAlt')];
                 let description = feats[featId][this.translateAttribName('attDesc')] == undefined ? feats[featId][this.translateAttribName('attDecAlt')] : feats[featId][this.translateAttribName('attDesc')];
                 if (description != undefined && description != false) description = '<p>' + description.replace('\n\n', '</p>\n<p>') + '</p>';
+                if (description == undefined) description = '';
                 let damage = feats[featId][this.translateAttribName('attackdamage')] == undefined ? '' : feats[featId][this.translateAttribName('attackdamage')] + '-' + strMod;
                 let damageType = feats[featId][this.translateAttribName('featdmgtype')] == undefined ? '' : feats[featId][this.translateAttribName('featdmgtype')].toLowerCase();
                 let range = feats[featId][this.translateAttribName('attackrange')] == undefined ? '' : feats[featId][this.translateAttribName('attackrange')];
@@ -1098,13 +1158,10 @@ class Roll20NpcImporter extends Application {
             let npcTokenData = JSON.parse(importData.defaulttoken.replace('\\', ''));
             actorData.data.token.displayName = parseInt(this.showTokenName); 
             actorData.data.token.name = actorData.data.name;
-            actorData.data.token.img = tokenImage === '' ? npcTokenData['imgsrc']: tokenImage;
-            if (actorData.data.token.img.indexOf('?') != -1) {
-                //actorData.data.token.img = actorData.data.token.img.split('?')[0];
+            if (tokenImage !== '') {
+                actorData.data.token.img = tokenImage;
             }
-            if (this.useTokenAsAvatar) {
-                actorData.data.img = actorData.data.token.img;
-            }
+
             actorData.data.token.width = this.getTokenSize(actorData.data.data.traits.size.value);
             actorData.data.token.height = actorData.data.token.width;
 
@@ -1427,6 +1484,20 @@ class Roll20NpcImporter extends Application {
                 return string;
             }
         }
+    }
+
+    /**
+     * checks if the given image url is valid and can be loaded. returns true if it can be loaded, false if not
+     * @param {any} imageUrl
+     */
+
+    async checkImageUrl(imageUrl) {
+        return await new Promise(function (resolve, reject) {
+            $("<img/>")
+                .on('load', function () { resolve(true); })
+                .on('error', function () { resolve(false); })
+                .attr("src", imageUrl);
+        });
     }
 
     /**
