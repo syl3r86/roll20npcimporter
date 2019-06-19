@@ -128,8 +128,11 @@ class Roll20NpcImporter extends Application {
             if (spellCompendium == 'noComp') {
                 this.spellCompendium = null;
             } else {
-                this.spellCompendium = game.packs.find(p => p.collection === spellCompendium);
-                await this.spellCompendium.getIndex();
+                //console.log('loading spells');
+                this.spellCompendium = await game.packs.find(p => p.collection === spellCompendium);
+                this.spellCompendiumIndex = await this.spellCompendium.getIndex();
+                //await this.spellCompendium.getIndex();
+                //console.log('done loading spells');
             }
 
             let files = html.find("input[name=fileUploads]").prop('files');
@@ -383,8 +386,13 @@ class Roll20NpcImporter extends Application {
         if (options.ignoreImg !== true) {
             // use folder images if the options is chosen
             if (this.useFolderPictures) {
-                image = this.avatarImgPath.replace('@name', escape(name));
-                tokenImage = this.tokenImgPath.replace('@name', escape(name));
+                let cleanName = name.replace(/[^a-zA-Z0-9\s\-\(\)]/g, '');
+                image = this.avatarImgPath.replace('@name', escape(cleanName));
+                tokenImage = this.tokenImgPath.replace('@name', escape(cleanName));
+                if (name.toLowerCase().indexOf('dragon') !== -1) {
+                    cleanName = cleanName.replace('Young', '').replace('Adult', '').replace('Ancient', '').replace('Wyrmling', '').trim()
+                }
+                image = this.avatarImgPath.replace('@name', escape(cleanName));
             }
 
             // imagepath was not set properly (maybe on purpose) so we use the default option of using the datas image
@@ -411,6 +419,15 @@ class Roll20NpcImporter extends Application {
 
             // make sure that what we want to use actually exists/works and fall back to use the tokenImage instead
             imgLoaded = await this.checkImageUrl(image);
+            if (imgLoaded === false) {
+                let newName = image.replace('%20', '-');
+                let newName = image.replace('%20', '-');
+                imgLoaded = await this.checkImageUrl(newName);
+                if (imgLoaded === true) {
+                    image = newName;
+                }
+            }
+            
             if (this.useTokenAsAvatar || imgLoaded === false) {
                 image = tokenImage;
             }
@@ -821,10 +838,11 @@ class Roll20NpcImporter extends Application {
                 }
                 if (this.spellCompendium !== null) {
                     let spell;
-                    await this.spellCompendium.getIndex().then(async index => {
+                    /*await this.spellCompendium.getIndex().then(async index => {
                         
                         spell = index.find(e => e.name.toLowerCase() === spellName.toLowerCase() );
-                    });
+                    });*/
+                    spell = this.spellCompendiumIndex.find(e => e.name.toLowerCase() === spellName.toLowerCase());
                     if (spell != null && spell != undefined) {
                         console.log('NPCImporter| Found Spell ' + spells[spellId].spellname + ' in compendium, using that');
                         spell = await this.spellCompendium.getEntry(spell['id']);
