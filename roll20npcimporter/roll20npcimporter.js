@@ -1,6 +1,5 @@
 /**
  * @author Felix Müller aka syl3r86
- * @version 0.5.2
  */
 
 class Roll20NpcImporter extends Application {
@@ -770,7 +769,7 @@ class Roll20NpcImporter extends Application {
 
 
         // set traits
-        actorData.data.data.traits.senses.value = this.getAttribute(attributes, 'npc_senses').replace(/(, passive Perception \d*)/g, '');
+        actorData.data.data.traits.senses.value = this.getAttribute(attributes, 'npc_senses') ? this.getAttribute(attributes, 'npc_senses').replace(/(, passive Perception \d*)/g, '') : '';
 
         let passivePerception = 10 + Math.floor((actorData.data.data.abilities.wis.value - 10) / 2);
         passivePerception = passivePerception + (actorData.data.data.attributes.prof.value * actorData.data.data.skills.prc.value);
