@@ -3,10 +3,11 @@ A module for FoundryVTT, used to import DND5e NPC sheets from the popular Roll20
 Only works for 5e NPC characters that use the OGL or Shaped sheet version.
 
 ## Installation
-1. Download the [roll20npcimporter.zip](https://github.com/syl3r86/roll20npcimporter/raw/master/roll20npcimporter.zip)
-2. Unzip it into FoundryVTT/resources/app/public/modules
-3. Restart Foundry if it was running.
-4. Enable the module in the Module Configuration
+1. Copy this link and use it in Foundrys Module Manager to install the Module
+
+    > https://raw.githubusercontent.com/syl3r86/roll20npcimporter/master/module.json
+    
+2. Enable the Module in your Worlds Module Settings
 
 You'll see this button in the actors list after correctly installing the module.
 
